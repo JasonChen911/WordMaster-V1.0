@@ -49,12 +49,15 @@ export default function Teacher() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.5rem' }}>
         <button onClick={() => navigate('/')} className="ios-icon-button" aria-label="Back"><ArrowLeft size={19} /></button>
         <div>
-          <h1 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>教师端</h1>
-          <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>课程 · 班级学习情况 · 教学建议</p>
+          <h1 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Teacher Preview
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-2" style={{ backgroundColor: 'var(--warning-subtle)', color: 'var(--warning)', verticalAlign: 'middle' }}>Preview</span>
+          </h1>
+          <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>课程 · 班级学习情况 · 教学建议（轻量预览）</p>
         </div>
       </div>
 
-      {/* Demo label */}
+      {/* Preview data label */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '0.5rem',
         padding: '0.6rem 0.9rem', marginBottom: '1.25rem', borderRadius: 'var(--radius-md)',
@@ -62,7 +65,7 @@ export default function Teacher() {
       }}>
         <BadgeCheck size={14} style={{ color: 'var(--warning)' }} />
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-          <strong>演示模式：</strong>当前展示的是「{overview?.demo_class_name || 'Demo Class'}」的演示数据（虚构学生，仅用于展示界面），不是真实用户数据。
+          <strong>Preview 演示数据：</strong>当前为「{overview?.demo_class_name || 'Demo Class'}」的虚构学生数据，仅用于预览课堂场景，<strong>不是真实运营结果</strong>。
         </span>
       </div>
 

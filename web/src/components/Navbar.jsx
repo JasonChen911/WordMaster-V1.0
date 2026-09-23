@@ -8,7 +8,7 @@ const navItems = [
   { to: '/ai-tutor', icon: Sparkles, label: 'AI导师' },
   { to: '/reading', icon: FileText, label: '阅读' },
   { to: '/analytics', icon: BarChart3, label: '分析' },
-  { to: '/teacher', icon: GraduationCap, label: '教师' },
+  { to: '/teacher', icon: GraduationCap, label: '教师Preview' },
   { to: '/settings', icon: Settings, label: '设置' },
 ]
 
