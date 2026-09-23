@@ -44,7 +44,7 @@ ROUTER_MODULES = [
     "routers.words", "routers.stats", "routers.ai", "routers.books",
     "routers.dictionary", "routers.search", "routers.audio",
     "routers.games", "routers.media", "routers.material", "routers.insights",
-    "routers.reading", "routers.teacher",
+    "routers.reading", "routers.teacher", "routers.mistakes",
 ]
 
 EXPECTED_ROUTE_COUNTS = {
@@ -61,6 +61,7 @@ EXPECTED_ROUTE_COUNTS = {
     "insights": 5,
     "reading": 2,
     "teacher": 3,
+    "mistakes": 5,
 }
 
 import importlib  # noqa: E402
@@ -79,7 +80,7 @@ for modname in ROUTER_MODULES:
     except Exception as e:  # noqa: BLE001
         check(f"{modname} imports cleanly", False, f"{type(e).__name__}: {e}")
 
-check("total router-declared routes == 64", total_routes == 64, f"got {total_routes}")
+check("total router-declared routes == 69", total_routes == 69, f"got {total_routes}")
 
 # ── 2. OpenAPI schema: all API paths present ──
 print()
@@ -134,6 +135,10 @@ EXPECTED_PATHS = [
     "/api/teacher/overview",
     "/api/teacher/courses",
     "/api/teacher/report",
+    "/api/mistakes",
+    "/api/mistakes/stats",
+    "/api/mistakes/{word_id}/review",
+    "/api/mistakes/{word_id}",
     "/api/search",
     "/api/favorites",
     "/api/books",
@@ -160,7 +165,7 @@ EXPECTED_PATHS = [
 ]
 
 missing = [p for p in EXPECTED_PATHS if p not in paths]
-check("all 64 API paths present in schema", not missing, f"missing={missing}")
+check("all 69 API paths present in schema", not missing, f"missing={missing}")
 check("health present", "/health" in paths)
 
 api_path_count = len([p for p in paths if p.startswith("/api/")])

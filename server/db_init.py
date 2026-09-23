@@ -17,7 +17,7 @@ from models import (
     Word, StudyRecord, DailyStats, DictionaryEntry, Book, BookWord,
     WordAIExplanation, WordMemoryState, AIContentCache, ConfusionSet,
     SourceDocument, SourceWord, Course, Student, StudentWordStat,
-    LearningEvent,
+    LearningEvent, MistakeRecord,
 )
 from seed import WORDS, BUILTIN_BOOKS
 from confusion_seed import CONFUSION_SEED
@@ -719,6 +719,26 @@ def _migrate_existing(db):
 
     # Seed the clearly-labelled Local Classroom Demo data (idempotent).
     _seed_teacher_demo(db)
+
+    # ── v15.0: mistake_records (错词本 aggregated entries) ──
+    _apply_migration(db, "v15.0_mistake_records",
+        """CREATE TABLE IF NOT EXISTS mistake_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER NOT NULL,
+            source TEXT NOT NULL,
+            mistake_type TEXT DEFAULT '',
+            count INTEGER DEFAULT 1,
+            first_occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_session_id TEXT DEFAULT '',
+            CONSTRAINT uq_mistake_word_source UNIQUE (word_id, source)
+        )""")
+    try:
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_mistake_records_word_id ON mistake_records (word_id)"))
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_mistake_records_source ON mistake_records (source)"))
+        db.commit()
+    except Exception:
+        db.rollback()
 
     # ── v14.0: learning_events (unified learning behavior record) ──
     _apply_migration(db, "v14.0_learning_events",

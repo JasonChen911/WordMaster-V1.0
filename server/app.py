@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from database import DATA_DIR
 from logging_config import setup_logging, startup_log
 from db_init import init_db
-from routers import words, stats, ai, books, dictionary, search, audio, games, media, material, insights, reading, teacher
+from routers import words, stats, ai, books, dictionary, search, audio, games, media, material, insights, reading, teacher, mistakes
 
 # ─── Load environment ───────────────────────────────────────────
 load_dotenv()
@@ -93,6 +93,7 @@ app.include_router(material.router)
 app.include_router(insights.router)
 app.include_router(reading.router)
 app.include_router(teacher.router)
+app.include_router(mistakes.router)
 
 
 # ─── Serve Frontend Static Files ────────────────────────────────

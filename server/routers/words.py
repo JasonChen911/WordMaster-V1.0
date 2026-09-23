@@ -20,6 +20,7 @@ from srs import (
     explain_state,
 )
 from learning_events import log_event, RESULT_TO_RATING, RATING_TO_RESULT
+from mistakes import record_mistake, SOURCE_DAILY, TYPE_MEANING
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +243,18 @@ def record_study(req: StudyRequest, db: Session = Depends(get_db)):
         fsrs_after=fsrs_state,
         algorithm_version="fsrs-5",
     )
+
+    # ── Record a daily mistake-book entry when the answer was wrong ──
+    # "unknown" (forgot) is the clear "答错" case; "fuzzy" (hard recall) is not
+    # counted as a mistake to avoid over-recording normal FSRS struggle.
+    if req.result == "unknown":
+        record_mistake(
+            db,
+            word_id=word.id,
+            source=SOURCE_DAILY,
+            mistake_type=TYPE_MEANING,
+            session_id=req.session_id or "",
+        )
 
     # ── Update daily stats ──
     today_str = now.date().isoformat()

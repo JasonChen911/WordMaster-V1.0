@@ -255,4 +255,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name, description, book_id: bookId }),
     }),
+
+  // Mistake book (错词本)
+  getMistakes: (source = 'all') => request(`/mistakes?source=${source}`),
+  getMistakeStats: () => request('/mistakes/stats'),
+  recordMistake: (word, source, mistakeType = '') =>
+    request('/mistakes', {
+      method: 'POST',
+      body: JSON.stringify({ word, source, mistake_type: mistakeType }),
+    }),
+  addMistakeToReview: (wordId) => request(`/mistakes/${wordId}/review`, { method: 'POST' }),
+  removeMistake: (wordId) => request(`/mistakes/${wordId}`, { method: 'DELETE' }),
 }

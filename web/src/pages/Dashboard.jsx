@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Zap, Sparkles, BookOpen, ArrowRight, Target, AlertTriangle, Flame,
-  Layers, GraduationCap, ChevronRight,
+  Layers, GraduationCap, ChevronRight, BookMarked,
 } from 'lucide-react'
 import { api } from '../api'
 
@@ -142,6 +142,7 @@ export default function Dashboard() {
       {/* ═══ Quick entries ═══ */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         <EntryRow icon={Layers} title="AI 材料分析" desc="从文章提取重点词汇，生成词书" onClick={() => navigate('/material')} />
+        <EntryRow icon={BookMarked} title="错词本" desc="查看日常与游戏中的错误词" onClick={() => navigate('/mistakes')} />
         <EntryRow icon={BookOpen} title="词书管理" desc="管理词书与词典" onClick={() => navigate('/dictionary')} />
         <EntryRow icon={GraduationCap} title="教师 Preview" desc="查看班级学习情况（演示数据）" onClick={() => navigate('/teacher')} />
       </div>

@@ -21,6 +21,7 @@ const About      = lazy(() => import('./pages/About'))
 const Games      = lazy(() => import('./pages/Games'))
 const MaterialImport = lazy(() => import('./pages/MaterialImport'))
 const Teacher = lazy(() => import('./pages/Teacher'))
+const MistakeBook = lazy(() => import('./pages/MistakeBook'))
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/games" element={<Games />} />
             <Route path="/material" element={<MaterialImport />} />
             <Route path="/teacher" element={<Teacher />} />
+            <Route path="/mistakes" element={<MistakeBook />} />
           </Routes>
         </Suspense>
         </ErrorBoundary>

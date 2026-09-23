@@ -231,6 +231,8 @@ export default function WordPuzzle({ onBack }) {
       setResult('wrong')
       setAnswerShake(true)
       setTimeout(() => setAnswerShake(false), 450)
+      // Record the wrong spelling into the mistake book (source = game).
+      api.recordMistake(current.english, 'game', 'spelling').catch(() => {})
     }
   }
 
@@ -420,49 +422,57 @@ export default function WordPuzzle({ onBack }) {
         )}
       </div>
 
-      {/* ═══ Placed Word Display ═══ */}
+      {/* ═══ Word Display: full word on correct, letter tiles otherwise ═══ */}
       <div className="flex justify-center mb-6" ref={answerRef}>
-        <div
-          className={`flex gap-1.5 flex-wrap justify-center min-h-[3rem] px-4 py-3 rounded-xl transition-all duration-300
-            ${answerGlow ? 'correct-glow' : ''}
-            ${answerShake ? 'shake' : ''}`}
-          style={{
-            backgroundColor: result === 'correct' ? 'var(--success-subtle)'
-              : result === 'wrong' ? 'var(--danger-subtle)'
-              : 'var(--surface-tertiary)',
-            border: `1.5px solid ${result === 'correct' ? 'var(--success)'
-              : result === 'wrong' ? 'var(--danger)'
-              : 'var(--border)'}`,
-            transform: result === 'correct' ? 'scale(1.03)' : 'scale(1)',
-            transition: 'transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.6s ease-out',
-          }}>
-          {placed.length === 0 ? (
-            <span className="text-sm" style={{ color: 'var(--text-tertiary)', opacity: 0.5 }}>
-              点击下方字母排列
+        {result === 'correct' ? (
+          <div className="text-center animate-scale-in" style={{ width: '100%' }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--success)' }}>
+              正确单词
+            </p>
+            <span style={{
+              display: 'inline-block', padding: '0.5rem 1.5rem',
+              borderRadius: 'var(--radius-lg)',
+              backgroundColor: 'var(--success-subtle)', border: '1.5px solid var(--success)',
+              fontSize: '2.5rem', fontWeight: 800, letterSpacing: '0.02em',
+              color: 'var(--text-primary)',
+              animation: 'scaleIn 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) forwards',
+            }}>
+              {current.english}
             </span>
-          ) : (
-            placed.map((letterIdx, i) => (
-              <span key={i}
-                className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-base font-extrabold uppercase tracking-wider cursor-pointer select-none
-                  ${newPlacedIdx === letterIdx ? 'letter-pop' : ''}`}
-                style={{
-                  backgroundColor: result === 'correct' ? 'var(--success-subtle)'
-                    : result === 'wrong' ? 'var(--danger-subtle)'
-                    : 'var(--surface-secondary)',
-                  color: result === 'correct' ? 'var(--success)'
-                    : result === 'wrong' ? 'var(--danger)'
-                    : 'var(--text-primary)',
-                  border: `1.5px solid ${result === 'correct' ? 'var(--success)'
-                    : result === 'wrong' ? 'var(--danger)'
-                    : 'var(--border)'}`,
-                  transition: 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), background-color 0.2s ease, border-color 0.2s ease',
-                }}
-                onClick={() => handleLetterClick(letterIdx)}>
-                {letters[letterIdx]}
+          </div>
+        ) : (
+          <div
+            className={`flex gap-1.5 flex-wrap justify-center min-h-[3rem] px-4 py-3 rounded-xl transition-all duration-300
+              ${answerGlow ? 'correct-glow' : ''}
+              ${answerShake ? 'shake' : ''}`}
+            style={{
+              backgroundColor: result === 'wrong' ? 'var(--danger-subtle)' : 'var(--surface-tertiary)',
+              border: `1.5px solid ${result === 'wrong' ? 'var(--danger)' : 'var(--border)'}`,
+              transform: 'scale(1)',
+              transition: 'transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1), background-color 0.3s ease, border-color 0.3s ease',
+            }}>
+            {placed.length === 0 ? (
+              <span className="text-sm" style={{ color: 'var(--text-tertiary)', opacity: 0.5 }}>
+                点击下方字母排列
               </span>
-            ))
-          )}
-        </div>
+            ) : (
+              placed.map((letterIdx, i) => (
+                <span key={i}
+                  className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-base font-extrabold uppercase tracking-wider cursor-pointer select-none
+                    ${newPlacedIdx === letterIdx ? 'letter-pop' : ''}`}
+                  style={{
+                    backgroundColor: result === 'wrong' ? 'var(--danger-subtle)' : 'var(--surface-secondary)',
+                    color: result === 'wrong' ? 'var(--danger)' : 'var(--text-primary)',
+                    border: `1.5px solid ${result === 'wrong' ? 'var(--danger)' : 'var(--border)'}`,
+                    transition: 'transform 0.2s cubic-bezier(0.22, 0.61, 0.36, 1), background-color 0.2s ease, border-color 0.2s ease',
+                  }}
+                  onClick={() => handleLetterClick(letterIdx)}>
+                  {letters[letterIdx]}
+                </span>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* ═══ Result Feedback ═══ */}
@@ -486,7 +496,8 @@ export default function WordPuzzle({ onBack }) {
         </div>
       )}
 
-      {/* ═══ Letter Tiles ═══ */}
+      {/* ═══ Letter Tiles (hidden once the word is solved) ═══ */}
+      {result === 'correct' ? null : (
       <div className="flex flex-wrap justify-center gap-2 mb-6">
         {letters.map((letter, i) => {
           const isPlaced = placed.includes(i)
@@ -526,6 +537,7 @@ export default function WordPuzzle({ onBack }) {
           )
         })}
       </div>
+      )}
 
       {/* ═══ Action Buttons ═══ */}
       <div className="flex items-center justify-center gap-3">

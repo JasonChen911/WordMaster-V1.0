@@ -303,6 +303,29 @@ class LearningEvent(Base):
     created_at = Column(DateTime, default=func.now())
 
 
+class MistakeRecord(Base):
+    """An aggregated mistake-book entry: one row per (word, source).
+
+    The same word can have two rows — one for daily review mistakes, one for
+    spelling-game mistakes — so the source distinction is preserved while the
+    book itself stays de-duplicated (count increments instead of piling rows).
+    """
+    __tablename__ = "mistake_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    word_id = Column(Integer, ForeignKey("words.id"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)      # "daily" | "game"
+    mistake_type = Column(String, default="")                # meaning | spelling | ...
+    count = Column(Integer, default=1)
+    first_occurred_at = Column(DateTime, default=func.now())
+    last_occurred_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    last_session_id = Column(String, default="")
+
+    __table_args__ = (
+        UniqueConstraint("word_id", "source", name="uq_mistake_word_source"),
+    )
+
+
 class WordMemoryState(Base):
     """FSRS adaptive memory state for a single word (one-to-one with ``words``).
 
