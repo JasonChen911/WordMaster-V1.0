@@ -5,6 +5,7 @@ import {
   Zap, Trophy, BookOpen, RotateCcw, Gamepad2, Brain,
 } from 'lucide-react'
 import { api } from '../api'
+import { speak, preloadQueue, getAutoPlay, stop as stopTts } from '../tts'
 import WordCard from '../components/WordCard'
 import Modal, { AlertModal } from '../components/Modal'
 import Celebration from '../components/Celebration'
@@ -165,6 +166,29 @@ export default function Study() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [showAnswer, animating, completed, currentWord, currentIndex, words])
+
+  // ── Preload current + next 1–2 word audio (background, non-blocking) ──
+  useEffect(() => {
+    if (!currentWord) return
+    const texts = [
+      currentWord.english,
+      words[currentIndex + 1]?.english,
+      words[currentIndex + 2]?.english,
+    ].filter(Boolean)
+    preloadQueue(texts)
+  }, [currentIndex, words, currentWord])
+
+  // ── Auto-play the new word once its card has transitioned ──
+  useEffect(() => {
+    if (!currentWord || !getAutoPlay()) return
+    const t = setTimeout(() => speak(currentWord.english), 420)
+    return () => clearTimeout(t)
+  }, [currentWord?.english])
+
+  // ── Stop any playing audio when leaving the study page ──
+  useEffect(() => {
+    return () => stopTts()
+  }, [])
 
   const openWhy = async () => {
     if (!currentWord) return

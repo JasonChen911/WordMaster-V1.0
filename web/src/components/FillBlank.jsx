@@ -5,6 +5,7 @@ import {
   BookOpen, Zap, Volume2, ChevronRight, RotateCcw,
 } from 'lucide-react'
 import { api } from '../api'
+import { speak } from '../tts'
 
 // ═══════════════════════════════════════════════════════════════
 // Web Audio — comprehensive game sound system
@@ -664,14 +665,7 @@ export default function FillBlank({ onBack }) {
                 例句
               </span>
               <button
-                onClick={() => {
-                  if (window.speechSynthesis) {
-                    speechSynthesis.cancel()
-                    const u = new SpeechSynthesisUtterance(current.example_en)
-                    u.lang = 'en-US'; u.rate = 0.85
-                    speechSynthesis.speak(u)
-                  }
-                }}
+                onClick={() => current?.example_en && speak(current.example_en)}
                 className="p-0.5 rounded transition-all hover:opacity-70"
                 style={{ color: 'var(--text-tertiary)' }}
                 title="播放例句">

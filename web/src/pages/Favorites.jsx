@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Star, Volume2, CheckCircle2, BookOpen, Sparkles } from 'lucide-react'
 import { api } from '../api'
+import { speak } from '../tts'
 import AIPanel from '../components/AIPanel'
 
 export default function Favorites() {
@@ -25,13 +26,9 @@ export default function Favorites() {
     } catch (e) { console.error(e) }
   }
 
-  const speakWord = (word, lang = 'en-US') => {
-    if (!window.speechSynthesis) return
-    speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(word)
-    utterance.lang = lang
-    utterance.rate = 0.88
-    speechSynthesis.speak(utterance)
+  const speakWord = (word) => {
+    if (!word) return
+    speak(word)
   }
 
   return (

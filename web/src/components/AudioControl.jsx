@@ -1,75 +1,51 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Volume2 } from 'lucide-react'
+import { speak, getAccent } from '../tts'
 
 /**
- * System TTS — Windows SpeechSynthesis, no network, no API.
- * Professional dictionary-style button: 🔊 US
+ * Unified pronunciation button — Neural TTS (edge-tts) with offline fallback.
+ * Debounces rapid clicks and shows immediate visual feedback while playing.
  */
-
-function getUSVoice() {
-  if (!window.speechSynthesis) return null
-  const voices = window.speechSynthesis.getVoices()
-  // Prefer Microsoft English US voices
-  const preferred = ['Microsoft Aria', 'Microsoft Zira', 'Microsoft David', 'Microsoft Mark']
-  for (const name of preferred) {
-    const v = voices.find(v => v.name.includes(name) && v.lang.startsWith('en'))
-    if (v) return v
-  }
-  return voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en')) || null
-}
-
 export default function AudioControl({ word, size = 'md' }) {
   const [playing, setPlaying] = useState(false)
-  const voiceRef = useRef(null)
-
-  // Lazy init voice on first interaction
-  const ensureVoice = () => {
-    if (voiceRef.current) return voiceRef.current
-    voiceRef.current = getUSVoice()
-    if (!voiceRef.current) {
-      const voices = window.speechSynthesis.getVoices()
-      voiceRef.current = getUSVoice() || voices[0] || null
-    }
-    return voiceRef.current
-  }
+  const lastPlayRef = useRef(0)
 
   const text = typeof word === 'string' ? word.trim() : ''
+  const accent = getAccent()
 
   const handleClick = useCallback((e) => {
     e.stopPropagation()
-    if (!text || !window.speechSynthesis) return
+    if (!text) return
+    // Debounce: ignore rapid spam clicks within 250ms (no overlapping audio).
+    const now = Date.now()
+    if (now - lastPlayRef.current < 250) return
+    lastPlayRef.current = now
 
-    window.speechSynthesis.cancel()
-    const voice = ensureVoice()
-
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = 'en-US'
-    u.rate = 0.85
-    u.pitch = 1.0
-    if (voice) u.voice = voice
-    u.onstart = () => setPlaying(true)
-    u.onend = () => setPlaying(false)
-    u.onerror = () => setPlaying(false)
-
-    window.speechSynthesis.speak(u)
+    setPlaying(true)
+    speak(text, { onEnd: () => setPlaying(false) })
   }, [text])
 
   if (!text) return null
 
+  const dims = size === 'sm' ? { px: '0.4rem', py: '0.25rem', gap: '0.25rem' } : { px: '0.75rem', py: '0.4rem', gap: '0.35rem' }
+
   return (
     <button
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 hover:scale-105 active:scale-95 select-none"
+      aria-label={`朗读 ${text}`}
+      className="inline-flex items-center rounded-xl text-xs font-semibold select-none transition-colors duration-150 active:scale-95"
       style={{
+        padding: `${dims.py} ${dims.px}`,
+        gap: dims.gap,
         backgroundColor: playing ? 'var(--accent)' : 'var(--accent-subtle)',
         color: playing ? '#fff' : 'var(--accent)',
         border: playing ? 'none' : '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
         cursor: 'pointer',
       }}
-      title="美式发音"
+      title={accent === 'uk' ? '英式发音' : '美式发音'}
     >
-      <Volume2 size={13} />
-      <span>US</span>
+      <Volume2 size={size === 'sm' ? 12 : 13} className={playing ? 'animate-pulse' : ''} />
+      <span>{accent === 'uk' ? 'UK' : 'US'}</span>
     </button>
   )
 }

@@ -99,10 +99,15 @@ async def generate_audio(
         ssml = _build_ssml(text, voice_key, speed)
         communicate = edge_tts.Communicate(ssml)
 
-        chunks = []
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                chunks.append(chunk["data"])
+        async def _collect():
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            return chunks
+
+        # Bound the network wait so a slow/hung Edge service can't block the UI.
+        chunks = await asyncio.wait_for(_collect(), timeout=15.0)
 
         if not chunks:
             logger.warning(f"Edge TTS returned no audio for '{text}'")
@@ -113,6 +118,9 @@ async def generate_audio(
         logger.info(f"Audio cached: {text} ({voice_key}@{speed}x) → {cache_file.name} ({len(audio_bytes)} bytes)")
         return audio_bytes
 
+    except asyncio.TimeoutError:
+        logger.error(f"Edge TTS timeout for '{text}'")
+        return None
     except ImportError:
         logger.error("edge-tts not installed. Run: pip install edge-tts")
         return None

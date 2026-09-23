@@ -3,6 +3,7 @@ import { ArrowLeft, Sparkles, BookOpen, Loader2, Volume2, ChevronDown, ChevronUp
 import { useNavigate } from 'react-router-dom'
 import SegmentControl from '../components/SegmentControl'
 import { api } from '../api'
+import { speak } from '../tts'
 
 const EXAMS = [
   { id: '高中英语', label: '高中英语' },
@@ -130,17 +131,13 @@ export default function Reading() {
   }
 
   const speakArticle = () => {
-    if (!article?.content || !window.speechSynthesis) return
-    speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(article.content)
-    u.lang = 'en-US'; u.rate = 0.9; speechSynthesis.speak(u)
+    if (!article?.content) return
+    speak(article.content)
   }
 
   const speakWord = (word) => {
-    if (!window.speechSynthesis) return
-    speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(word)
-    u.lang = 'en-US'; u.rate = 0.85; speechSynthesis.speak(u)
+    if (!word) return
+    speak(word)
   }
 
   const selectAnswer = (qText, letter) => {

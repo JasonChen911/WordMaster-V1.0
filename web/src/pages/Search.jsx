@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search as SearchIcon, Volume2, Sparkles, X, BookOpen, ChevronRight } from 'lucide-react'
 import { api } from '../api'
+import { speak } from '../tts'
 
-function playWord(word, accent = 'us') {
-  if (window.pywebview?.api) {
-    window.pywebview.api.play_audio(JSON.stringify({ word, accent })).catch(() => {})
-  }
+function playWord(word) {
+  if (!word) return
+  speak(word)
 }
 
 export default function Search() {

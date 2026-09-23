@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight, Volume2, VolumeX, Sparkles, FileText, User, Mo
 import { isSoundEnabled, setSoundEnabled } from '../useSound'
 import { useTheme } from '../theme/ThemeContext'
 import ThemeCustomizer from '../theme/ThemeCustomizer'
+import { getAccent, setAccent as persistAccent, getSpeed, setSpeed as persistSpeed, getAutoPlay, setAutoPlay as persistAutoPlay } from '../tts'
 
 function Section({ title, children }) {
   return (
@@ -61,11 +62,40 @@ function ToggleRow({ icon: Icon, label, detail, checked, onChange, last }) {
   )
 }
 
+function ChoiceRow({ label, value, onChange, options, last }) {
+  return (
+    <div className="w-full flex items-center gap-3 px-4 py-3.5"
+      style={{ borderBottom: last ? 'none' : '1px solid var(--border)' }}>
+      <span className="text-sm flex-1" style={{ color: 'var(--text-primary)' }}>{label}</span>
+      <div style={{ display: 'flex', gap: '0.25rem', padding: '0.15rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--surface-tertiary)' }}>
+        {options.map((o) => (
+          <button key={o.value} onClick={() => onChange(o.value)}
+            style={{
+              padding: '0.25rem 0.75rem', borderRadius: 'var(--radius-sm)', border: 'none', cursor: 'pointer',
+              fontSize: '0.75rem', fontWeight: 600,
+              backgroundColor: value === o.value ? 'var(--surface)' : 'transparent',
+              color: value === o.value ? 'var(--text-primary)' : 'var(--text-tertiary)',
+            }}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
   const navigate = useNavigate()
   const [soundOn, setSoundOn] = useState(() => isSoundEnabled())
   const [showCustomizer, setShowCustomizer] = useState(false)
   const { mode, toggleMode, themeName, setTheme, themes } = useTheme()
+  const [accent, setAccent] = useState(() => getAccent())
+  const [speed, setSpeed] = useState(() => getSpeed())
+  const [autoPlay, setAutoPlay] = useState(() => getAutoPlay())
+
+  const handleAccent = (v) => { setAccent(v); persistAccent(v) }
+  const handleSpeed = (v) => { setSpeed(v); persistSpeed(v) }
+  const handleAutoPlay = (v) => { setAutoPlay(v); persistAutoPlay(v) }
 
   if (showCustomizer) {
     return <ThemeCustomizer onBack={() => setShowCustomizer(false)} />
@@ -149,6 +179,19 @@ export default function Settings() {
           detail={soundOn ? '完成学习时播放音效' : '已关闭音效'}
           checked={soundOn}
           onChange={() => { const n = !soundOn; setSoundOn(n); setSoundEnabled(n) }}
+          last />
+      </Section>
+
+      {/* ── 发音 ── */}
+      <Section title="发音">
+        <ChoiceRow label="口音" value={accent} onChange={handleAccent}
+          options={[{ value: 'us', label: '美式英语' }, { value: 'uk', label: '英式英语' }]} />
+        <ChoiceRow label="语速" value={speed} onChange={handleSpeed}
+          options={[{ value: 'normal', label: '正常' }, { value: 'slow', label: '慢速' }]} />
+        <ToggleRow icon={Volume2} label="自动发音"
+          detail={autoPlay ? '进入新单词时自动朗读' : '仅点击发音按钮时朗读'}
+          checked={autoPlay}
+          onChange={() => handleAutoPlay(!autoPlay)}
           last />
       </Section>
 
