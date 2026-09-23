@@ -42,6 +42,7 @@ export const api = {
     const params = bookId ? `?book_id=${bookId}` : ''
     return request(`/dashboard${params}`)
   },
+  getHome: () => request('/home'),
 
   // Words
   getTodayWords: (bookId = null) => {

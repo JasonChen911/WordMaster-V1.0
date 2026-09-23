@@ -13,13 +13,49 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import (
-    Word, StudyRecord, DailyStats, WordMemoryState, ConfusionSet,
+    Word, StudyRecord, DailyStats, WordMemoryState, ConfusionSet, LearningEvent,
 )
 from srs import retrievability_at, explain_state
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _event_stats(db: Session) -> dict:
+    """Aggregate raw learning events: response time, error-type breakdown, level."""
+    total = db.query(sa_func.count(LearningEvent.id)).scalar() or 0
+    avg_rt = 0
+    if total:
+        avg_rt = int(
+            db.query(sa_func.avg(LearningEvent.response_time_ms))
+            .filter(LearningEvent.response_time_ms > 0)
+            .scalar() or 0
+        )
+
+    # Error-type breakdown (from the fact layer, not AI).
+    rows = (
+        db.query(LearningEvent.error_type, sa_func.count(LearningEvent.id))
+        .filter(LearningEvent.error_type != "", LearningEvent.error_type != "none")
+        .group_by(LearningEvent.error_type)
+        .all()
+    )
+    error_breakdown = {t: int(c) for t, c in rows if t}
+
+    # Insight reliability level based on data volume.
+    if total < 3:
+        level = "insufficient"
+    elif total < 30:
+        level = "basic"
+    else:
+        level = "full"
+
+    return {
+        "total_events": total,
+        "avg_response_time_ms": avg_rt,
+        "error_breakdown": error_breakdown,
+        "insight_level": level,
+    }
 
 
 def _last_7_days(db: Session) -> dict:
@@ -114,11 +150,67 @@ def _weak_words(db: Session, limit: int = 15) -> list[dict]:
 
 @router.get("/api/insights")
 def get_insights(db: Session = Depends(get_db)):
-    """Real learning statistics + FSRS high-risk words + weak words."""
+    """Real learning statistics + FSRS high-risk words + weak words + event stats."""
     return {
         "last_7_days": _last_7_days(db),
         "high_risk_words": _high_risk_words(db),
         "weak_words": _weak_words(db),
+        "events": _event_stats(db),
+    }
+
+
+@router.get("/api/home")
+def get_home(db: Session = Depends(get_db)):
+    """Purpose-built homepage summary: answer "what should I learn today?"."""
+    from core import _get_active_book_id, _book_id_str, _get_progress_stats_sql
+    from models import Book
+
+    bid = _get_active_book_id(db)
+    stats = _get_progress_stats_sql(db, bid) if bid else {"total": 0, "new": 0, "review_due": 0, "studied": 0}
+
+    review_due = stats.get("review_due", 0)
+    new_available = stats.get("new", 0)
+    high_risk = len(_high_risk_words(db, limit=50))
+
+    # Today's tasks = due reviews + a batch of new words (capped at 20/day).
+    new_today = min(new_available, 20)
+    today_tasks = review_due + new_today
+
+    # Estimated minutes: 30s/word default, refined by real avg response time.
+    events = _event_stats(db)
+    avg_rt = events.get("avg_response_time_ms", 0)
+    if avg_rt > 0:
+        secs_per_word = max(10, avg_rt / 1000)
+    else:
+        secs_per_word = 30
+    estimated_minutes = round((today_tasks * secs_per_word) / 60)
+
+    # Streak (consecutive active days).
+    streak = 0
+    check = date.today()
+    while True:
+        ds = db.query(DailyStats).filter(DailyStats.date == check.isoformat()).first()
+        if ds and (ds.words_studied or 0) > 0:
+            streak += 1
+            check -= timedelta(days=1)
+        else:
+            break
+
+    book = db.query(Book).filter(Book.id == bid).first() if bid else None
+    return {
+        "review_due": review_due,
+        "new_words": new_available,
+        "new_today": new_today,
+        "today_tasks": today_tasks,
+        "estimated_minutes": estimated_minutes,
+        "high_risk": high_risk,
+        "streak_days": streak,
+        "active_book": {
+            "id": _book_id_str(db, bid) if bid else "",
+            "book_name": book.book_name if book else "",
+            "word_count": book.word_count if book else 0,
+        } if book else None,
+        "insight_level": events.get("insight_level", "insufficient"),
     }
 
 
