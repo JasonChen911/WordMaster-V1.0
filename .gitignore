@@ -1,0 +1,74 @@
+# ============================================================
+# WordMaster .gitignore
+# ============================================================
+
+# --- Dependencies ---
+node_modules/
+
+# --- Build output ---
+dist/
+build/
+*.egg-info/
+*.egg
+
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# --- Database files ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Logs ---
+*.log
+logs/
+
+# --- User data (runtime generated) ---
+user_data/
+
+# --- Installer output ---
+installer_output/
+Output/
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+.env.local
+.env.production
+.env.development
+secrets/
+credentials/
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- OS files ---
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Python virtual environment ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Test / Coverage ---
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# --- Runtime scratch dirs ---
+.pipcache/
+.testdata/
+.tmp/

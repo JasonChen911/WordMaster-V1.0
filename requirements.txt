@@ -1,0 +1,25 @@
+# WordMaster — AI-Powered Vocabulary Learning Assistant
+# Install: pip install -r requirements.txt
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+sqlalchemy>=2.0.30
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+
+# FSRS adaptive spaced repetition (MIT License, Open Spaced Repetition)
+fsrs>=6.3.0
+
+# Desktop window (native Windows window, no browser)
+pywebview>=5.0
+
+# Microsoft Edge Neural TTS — natural pronunciation
+edge-tts>=7.0
+pyttsx3>=2.90
+
+# Secure credential storage (Windows Credential Manager)
+keyring>=25.0.0
+
+# For Windows packaging
+pyinstaller>=6.0.0

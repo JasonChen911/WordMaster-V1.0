@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/wordmaster-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <title>WordMaster — 智能背单词</title>
+    <meta name="description" content="AI-powered English vocabulary learning assistant" />
+    <style>
+      /* ═══ Splash Screen ═══ */
+      #splash {
+        position: fixed; inset: 0; z-index: 99999;
+        background: #000;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        opacity: 1;
+        transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
+      }
+      #splash.hidden {
+        opacity: 0; visibility: hidden;
+        pointer-events: none;
+      }
+      #splash .logo {
+        width: 190px; height: 190px;
+        display: block;
+        object-fit: contain;
+        opacity: 0;
+        transform: scale(0.9);
+        filter: blur(3px);
+        animation: splashLogoIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.12s forwards;
+      }
+      #splash .title {
+        margin-top: -18px;
+        font-size: 21px; font-weight: 600;
+        color: #fafafa;
+        font-family: 'Inter', -apple-system, sans-serif;
+        letter-spacing: 0.01em;
+        opacity: 0;
+        transform: translateY(7px);
+        animation: splashTitleIn 0.55s ease-out 0.6s forwards;
+      }
+      @keyframes splashLogoIn {
+        from { opacity: 0; transform: scale(0.9); filter: blur(3px); }
+        to   { opacity: 1; transform: scale(1); filter: blur(0); }
+      }
+      @keyframes splashTitleIn {
+        from { opacity: 0; transform: translateY(7px); }
+        to   { opacity: 0.9; transform: translateY(0); }
+      }
+    </style>
+  </head>
+  <body class="antialiased">
+    <!-- Splash -->
+    <div id="splash">
+      <img class="logo" src="/wordmaster-logo.png" alt="WordMaster Logo" />
+      <div class="title">WordMaster</div>
+    </div>
+
+    <!-- Main app -->
+    <canvas id="particle-canvas"></canvas>
+    <div id="root" style="position:relative;z-index:1"></div>
+
+    <!-- Keep the launch experience visible for about two seconds total. -->
+    <script>
+      (function() {
+        window.__wordMasterSplashStartedAt = performance.now();
+      })();
+      window.addEventListener('app-mounted', function() {
+        var splash = document.getElementById('splash');
+        if (splash) {
+          var elapsed = performance.now() - (window.__wordMasterSplashStartedAt || 0);
+          var delay = Math.max(0, 1650 - elapsed);
+          setTimeout(function() {
+            splash.classList.add('hidden');
+            setTimeout(function() { splash.remove(); }, 450);
+          }, delay);
+        }
+      });
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
