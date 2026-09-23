@@ -3,9 +3,9 @@ import { Search as SearchIcon, Volume2, Sparkles, X, BookOpen, ChevronRight } fr
 import { api } from '../api'
 import { speak } from '../tts'
 
-function playWord(word) {
+function playWord(word, accent) {
   if (!word) return
-  speak(word)
+  speak(word, { accent: accent === 'uk' ? 'uk' : 'us' })
 }
 
 export default function Search() {

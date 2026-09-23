@@ -43,9 +43,14 @@ else:
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# Bumped cache namespace so any audio previously cached from a URL / "word+URL"
+# key is no longer read. Old files remain on disk but are simply orphaned.
+_CACHE_VERSION = "v3"
+
+
 def _cache_path(word: str, voice_key: str, speed: float) -> Path:
     """Build cache file path for given word + voice + speed."""
-    raw = f"{word.lower()}:{voice_key}:{speed}".encode()
+    raw = f"{_CACHE_VERSION}:{word.lower()}:{voice_key}:{speed}".encode()
     name = hashlib.md5(raw).hexdigest() + ".mp3"
     return CACHE_DIR / name
 

@@ -36,6 +36,16 @@ function getAudio() {
 // Monotonic id so stale audio callbacks are ignored after a newer play.
 let _playId = 0
 
+// URL / audio-ref patterns that must NEVER be spoken as text.
+const URL_PATTERN = /^(https?:\/\/|ftp:\/\/|www\.)/i
+const AUDIO_EXT_PATTERN = /\.(mp3|wav|ogg|m4a|spx|aac|flac)(\?.*)?$/i
+const SOUND_REF_PATTERN = /^(sound|dict|mdx|mdict):\/\//i
+
+function isUrlLike(text) {
+  const t = String(text).trim()
+  return URL_PATTERN.test(t) || AUDIO_EXT_PATTERN.test(t) || SOUND_REF_PATTERN.test(t)
+}
+
 function _backendUrl(text, accent, speed) {
   const voice = accent === 'uk' ? 'uk' : 'us'
   const s = SPEED_VALUES[speed] ?? 1.0
@@ -81,12 +91,26 @@ export function stop() {
 /**
  * Play text via Neural TTS, falling back to system TTS when the request fails.
  * `onEnd` is called once playback finishes (either path).
+ *
+ * Strictly rejects non-string and URL-like input — a word pronunciation must be
+ * exactly the word, never a URL / audio address / dictionary link.
  */
 export function speak(text, opts = {}) {
   const accent = opts.accent || getAccent()
   const speed = opts.speed || getSpeed()
   const onEnd = opts.onEnd
-  if (!text) { onEnd?.(); return }
+
+  if (typeof text !== 'string') {
+    console.error('[TTS] refuse non-string input:', text)
+    onEnd?.(); return
+  }
+  const clean = text.trim()
+  if (!clean) { onEnd?.(); return }
+  if (isUrlLike(clean)) {
+    console.error('[TTS] refuse URL-like text:', clean)
+    onEnd?.(); return
+  }
+  if (import.meta.env?.DEV) console.debug('[TTS WORD]', clean)
 
   const id = ++_playId
   stop()
@@ -95,12 +119,30 @@ export function speak(text, opts = {}) {
   a.onended = () => { if (id === _playId) onEnd?.() }
   a.onerror = () => {
     if (id !== _playId) return
-    _systemSpeak(text, accent, speed, onEnd)
+    _systemSpeak(clean, accent, speed, onEnd)
   }
-  a.src = _backendUrl(text, accent, speed)
+  a.src = _backendUrl(clean, accent, speed)
   a.play().catch(() => {
-    if (id === _playId) _systemSpeak(text, accent, speed, onEnd)
+    if (id === _playId) _systemSpeak(clean, accent, speed, onEnd)
   })
+}
+
+/**
+ * Play an audio-file URL directly (NOT through TTS). Used when an API returns an
+ * ``audio_url`` field — that URL must go to the <audio> player, never to speak().
+ */
+export function playAudioUrl(url) {
+  if (typeof url !== 'string' || !URL_PATTERN.test(url.trim())) {
+    console.error('[TTS] playAudioUrl requires an http(s) URL, got:', url)
+    return
+  }
+  const id = ++_playId
+  stop()
+  const a = getAudio()
+  a.onended = null
+  a.onerror = null
+  a.src = url.trim()
+  a.play().catch(() => { if (id === _playId) { /* play failed */ } })
 }
 
 /**

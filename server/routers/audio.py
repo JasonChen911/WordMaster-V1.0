@@ -1,5 +1,7 @@
 """Audio routes: Edge Neural TTS voices, cache management, word audio."""
 
+import re
+
 from fastapi import APIRouter, Query
 from fastapi.responses import Response as FastAPIResponse, JSONResponse
 
@@ -39,6 +41,10 @@ async def get_word_audio(
     """Generate and return MP3 audio for a word using Microsoft Edge Neural TTS."""
     # Skip non-word route segments (safety net)
     if word in ("voices", "cache", "status"):
+        return JSONResponse({"error": "Invalid word"}, status_code=400)
+
+    # Defense in depth: never feed a URL / audio-file address to the TTS engine.
+    if re.search(r"^(https?://|www\.)|\.(mp3|wav|ogg|m4a|spx|aac)(\?|$)", word, re.IGNORECASE):
         return JSONResponse({"error": "Invalid word"}, status_code=400)
 
     supported = [0.5, 0.75, 1.0, 1.25]
