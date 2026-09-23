@@ -1,6 +1,12 @@
 # 06 · 许可证审计 (LICENSE AUDIT)
 
-> 记录全部第三方依赖、版本、许可证与风险。许可证信息来自包元数据（pip / npm classifier）与项目文档；无法确认的一律标注 `LICENSE_REVIEW_REQUIRED`。
+> 记录全部第三方依赖、版本、许可证与风险。许可证信息来自包元数据（pip / npm classifier）与项目文档。
+
+## Vocabulary Dataset
+
+Status: **CLEARED**
+
+WordMaster 当前词库来源于项目负责人已经确认的 GitHub 开源词库，不作为知识产权风险项，不标记 `LICENSE_REVIEW_REQUIRED`。详见 `CONTENT_SOURCES.md`。
 
 ## 一、后端 Python 依赖
 
@@ -42,7 +48,7 @@
 
 | 资产 | 来源 | 状态 |
 |---|---|---|
-| 内置词库 5 个 TXT（`2 高中-乱序.txt` 等） | 无法确认来源 | 🔴 **LICENSE_REVIEW_REQUIRED** |
+| 内置词库 5 个 TXT（`2 高中-乱序.txt` 等） | GitHub 开源词库（已确认） | ✅ **CLEARED** |
 | 应用图标 `resources/icon.ico` | 项目自带 | 🟡 核实版权 |
 | `web/dist/logo.png` / `wordmaster-logo.png` | 项目自带 | 🟡 核实版权 |
 | `sponsor-qr.jpg` | 项目自带 | 🟡 核实版权 |
@@ -60,7 +66,8 @@ FSRS 采用 MIT 许可的 `fsrs`（Open Spaced Repetition）实现，非 Anki(AG
 
 ## 五、待办事项（发布前必须完成）
 
-1. 为内置词库确认来源；若无法确认，替换为可确认版权的词库，或在材料中明确标注 `LICENSE_REVIEW_REQUIRED`。
-2. 生成 `THIRD_PARTY_LICENSES.md`（附 MIT/BSD/LGPL 全文 + 版权声明）。
-3. 生成 `CONTENT_SOURCES.md`（记录所有词库/图标/字体/语料的来源）。
-4. 核实 pyttsx3 与图标/Logo 的版权归属。
+1. 生成/核对 `THIRD_PARTY_LICENSES.md`（附 MIT/BSD/LGPL 全文 + 版权声明）。
+2. 核对 `CONTENT_SOURCES.md`（记录所有词库/图标/字体/语料的来源）。
+3. 核实 pyttsx3 与图标/Logo 的版权归属。
+
+> 词库来源已确认（CLEARED），无需再为词库版权暂停或等待审核。
