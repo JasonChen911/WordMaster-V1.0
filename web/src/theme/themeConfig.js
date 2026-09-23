@@ -7,6 +7,11 @@
  * Custom themes are stored in localStorage and merged at runtime.
  */
 
+import {
+  deriveAccent,
+  lighten,
+} from './themeUtils'
+
 // ═══════════════════════════════════════════════════════════════
 // Shared token generators
 // ═══════════════════════════════════════════════════════════════
@@ -321,3 +326,102 @@ export function buildCustomTheme(config) {
     _borderStrongDark:  `color-mix(in srgb, ${bg} 16%, transparent)`,
   })
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Simplified custom theme (single "主色" → derived palette)
+// ═══════════════════════════════════════════════════════════════
+
+export const DEFAULT_CUSTOM_PRIMARY = '#6EA8FE'
+
+/** A palette for the customizer: neutral surfaces, one accent color. */
+const NEUTRAL = {
+  light: {
+    bg: '#FAFAF9',
+    surface: '#FFFFFF',
+    surfaceTertiary: '#F0F0EE',
+    textPrimary: '#1A1A1C',
+    textSecondary: '#6B6B70',
+    textTertiary: '#A0A0A6',
+    border: 'rgba(0,0,0,0.06)',
+    borderStrong: 'rgba(0,0,0,0.12)',
+  },
+  dark: {
+    bg: '#0C0C0E',
+    surface: '#1A1A1D',
+    surfaceTertiary: '#26262A',
+    textPrimary: '#F4F4F6',
+    textSecondary: '#9D9DA4',
+    textTertiary: '#5E5E66',
+    border: 'rgba(255,255,255,0.07)',
+    borderStrong: 'rgba(255,255,255,0.11)',
+  },
+}
+
+/**
+ * Build a full theme from a single primary ("主色") color.
+ *
+ * The neutral surfaces/text/border stay fixed (readable in light + dark);
+ * the accent and dark-mode primary are derived from the chosen color, so a
+ * user only ever has to pick one color.
+ */
+export function buildThemeFromPrimary(primary, name = '自定义主题') {
+  const p = normalizeSafeHex(primary)
+  const accent = deriveAccent(p)
+  const L = NEUTRAL.light
+  const D = NEUTRAL.dark
+
+  return makeTheme({
+    _name: name,
+    _desc: '基于主色自动生成',
+    _primary: p,
+    _accent: accent,
+    _bg: L.bg,
+    _surface: L.surface,
+    _surfaceTertiary: L.surfaceTertiary,
+    _textPrimary: L.textPrimary,
+    _textSecondary: L.textSecondary,
+    _textTertiary: L.textTertiary,
+    _textInverse: '#FFFFFF',
+    _border: L.border,
+    _borderStrong: L.borderStrong,
+    // Dark: keep the neutral palette dark and lift the primary for contrast.
+    _primaryDark: lighten(p, 0.18),
+    _accentDark: lighten(p, 0.26),
+    _bgDark: D.bg,
+    _surfaceDark: D.surface,
+    _surfaceTertiaryDark: D.surfaceTertiary,
+    _textPrimaryDark: D.textPrimary,
+    _textSecondaryDark: D.textSecondary,
+    _textTertiaryDark: D.textTertiary,
+    _textInverseDark: D.bg,
+    _borderDark: D.border,
+    _borderStrongDark: D.borderStrong,
+  })
+}
+
+function normalizeSafeHex(hex) {
+  const h = typeof hex === 'string' && /^#?[0-9a-fA-F]{3,6}$/.test(hex.trim())
+  if (!h) return DEFAULT_CUSTOM_PRIMARY
+  let out = hex.trim().replace('#', '')
+  if (out.length === 3) out = out.split('').map((c) => c + c).join('')
+  return '#' + out.toLowerCase()
+}
+
+// ── Customizer presets + common colors ─────────────────────────
+
+/** Presets shown in the customizer. `mode` is the app light/dark preference. */
+export const CUSTOM_PRESETS = [
+  { id: 'default-blue', name: '默认蓝', primary: '#6EA8FE', mode: 'light' },
+  { id: 'light-blue', name: '浅蓝', primary: '#7EB6FF', mode: 'light' },
+  { id: 'mono', name: '极简黑白', primary: '#6B7280', mode: 'light' },
+  { id: 'dark', name: '深色', primary: '#5B8DEF', mode: 'dark' },
+  { id: 'soft-purple', name: '柔和紫', primary: '#A78BFA', mode: 'light' },
+  { id: 'natural-green', name: '自然绿', primary: '#34D399', mode: 'light' },
+]
+
+/** Quick-pick swatches for the common-colors row. */
+export const COMMON_COLORS = [
+  '#7EB6FF', '#3B82F6', '#1D4ED8', '#8B5CF6',
+  '#10B981', '#06B6D4', '#F59E0B', '#EF4444',
+  '#6B7280', '#111827',
+]

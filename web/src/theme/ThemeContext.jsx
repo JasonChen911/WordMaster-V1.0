@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { THEMES, THEME_NAMES, DEFAULT_THEME, buildCustomTheme } from './themeConfig'
+import { THEMES, THEME_NAMES, DEFAULT_THEME, buildCustomTheme, buildThemeFromPrimary } from './themeConfig'
 
 const CTX = createContext()
 
@@ -32,12 +32,25 @@ function persist(mode, name, custom) {
   else localStorage.removeItem(STORAGE_KEY_CUSTOM)
 }
 
+/**
+ * Resolve a persisted custom config to a theme object, keeping backward
+ * compatibility: the new simplified config is a single `{ primary }`; the
+ * legacy config carried `accent/bg/surface/text` (and an RGB-less hex).
+ */
+function resolveCustomTheme(custom) {
+  if (!custom) return buildThemeFromPrimary(undefined)
+  if (custom.primary && !custom.accent && !custom.bg && !custom.surface && !custom.text) {
+    return buildThemeFromPrimary(custom.primary, custom.name)
+  }
+  return buildCustomTheme(custom)
+}
+
 export function ThemeProvider({ children }) {
   const [state, setState] = useState(loadPersisted)
 
   // Resolve active theme object
   const themeDef = state.name === 'custom' && state.custom
-    ? buildCustomTheme(state.custom)
+    ? resolveCustomTheme(state.custom)
     : THEMES[state.name] || THEMES[DEFAULT_THEME]
 
   const mode = state.mode
