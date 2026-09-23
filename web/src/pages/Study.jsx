@@ -37,6 +37,7 @@ export default function Study() {
   const [activeBook, setActiveBook] = useState(null)
   const [dailyGoal, setDailyGoal] = useState(20)
   const [dailyCompleted, setDailyCompleted] = useState(0)
+  const [summary, setSummary] = useState(null)
   const [showResetModal, setShowResetModal] = useState(false)
   const [alertMsg, setAlertMsg] = useState(null)
   const [showCelebration, setShowCelebration] = useState(false)
@@ -49,12 +50,19 @@ export default function Study() {
   const bookIdRef = useRef(null)
   const sessionIdRef = useRef(`study-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
 
-  // ── Load words ──
-  const fetchWords = useCallback(async (bookId) => {
+  // ── Unified study summary (daily goal + ETA, same as the homepage) ──
+  const fetchSummary = useCallback(async () => {
+    try {
+      const s = await api.getStudySummary()
+      setSummary(s)
+      if (s?.daily_goal) setDailyGoal(s.daily_goal)
+    } catch (e) { console.error(e) }
+  }, [])
+
+  // ── Load words (queue size = unified daily goal) ──
+  const fetchWords = useCallback(async (bookId, goal) => {
     setLoading(true); setError(null)
     try {
-      const goal = parseInt(localStorage.getItem('wordmaster-daily-goal') || '20', 10)
-      setDailyGoal(goal)
       const data = await api.getStudyQueue(bookId, goal)
       setWords(data)
     } catch (e) {
@@ -68,14 +76,20 @@ export default function Study() {
     let cancelled = false
     async function init() {
       try {
-        const resp = await api.getActiveBook()
-        if (!cancelled) {
-          const book = resp.book
-          setActiveBook(book)
-          if (book) { bookIdRef.current = book.id; await fetchWords(book.id) }
-          else { await fetchWords(null) }
+        const [bookResp, summaryData] = await Promise.all([api.getActiveBook(), api.getStudySummary()])
+        if (cancelled) return
+        const book = bookResp.book
+        setActiveBook(book)
+        if (summaryData) {
+          setSummary(summaryData)
+          setDailyGoal(summaryData.daily_goal || 20)
         }
-      } catch (e) { if (!cancelled) await fetchWords(null) }
+        const goal = summaryData?.daily_goal || 20
+        if (book) { bookIdRef.current = book.id; await fetchWords(book.id, goal) }
+        else { await fetchWords(null, goal) }
+      } catch (e) {
+        if (!cancelled) { await fetchSummary(); await fetchWords(null, 20) }
+      }
     }
     init()
     return () => { cancelled = true }
@@ -93,7 +107,10 @@ export default function Study() {
           setCompleted(false); setDailyCompleted(0)
           setSessionStats({ too_easy: 0, know: 0, fuzzy: 0, unknown: 0 })
           cardStartTime.current = Date.now()
-          fetchWords(newBook.id)
+          api.getStudySummary().then((s) => {
+            setSummary(s); setDailyGoal(s?.daily_goal || 20)
+            fetchWords(newBook.id, s?.daily_goal || 20)
+          })
         }
       } catch (e) { /* ignore */ }
     }, 2000)
@@ -116,6 +133,7 @@ export default function Study() {
       setSessionStats(prev => ({ ...prev, [result]: prev[result] + 1 }))
       setDailyCompleted(prev => prev + 1)
       setLastFsrs(resp?.fsrs || null)
+      fetchSummary() // refresh the unified ETA after completing a word
     } catch (e) {
       console.error(e)
       setLastFsrs(null)
@@ -405,7 +423,7 @@ export default function Study() {
         }}>
           <span className="text-[10px] font-semibold uppercase tracking-wider"
             style={{ color: 'var(--text-tertiary)' }}>
-            今日目标 {Math.min(dailyCompleted, dailyGoal)}/{dailyGoal}
+            {summary?.display_text || '加载中…'}
           </span>
           <span className="text-[10px] font-semibold uppercase tracking-wider"
             style={{ color: 'var(--text-tertiary)' }}>

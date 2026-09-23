@@ -34,6 +34,8 @@ export default function WordCard({ word, showAnswer, onToggleAnswer, onToggleFav
   const [isHovered, setIsHovered] = useState(false)
   const [ripple, setRipple] = useState(null)
   const cardRef = useRef(null)
+  const rafRef = useRef(null)
+  const pointerRef = useRef(null)
 
   // AI explanation state
   const [aiData, setAiData] = useState(null)
@@ -51,6 +53,11 @@ export default function WordCard({ word, showAnswer, onToggleAnswer, onToggleFav
     fetchedWordRef.current = null
   }, [word?.english])
 
+  // Cancel any pending tilt animation frame on unmount
+  useEffect(() => {
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
+
   // Check AI config status when card flips to answer
   useEffect(() => {
     if (!showAnswer || aiConfigured !== null) return
@@ -61,19 +68,30 @@ export default function WordCard({ word, showAnswer, onToggleAnswer, onToggleFav
     return () => { cancelled = true }
   }, [showAnswer, aiConfigured])
 
+  // Throttle the tilt to once per animation frame and avoid reading layout on
+  // every mousemove event (which would otherwise trigger layout thrashing).
   const handleMouseMove = (e) => {
-    if (!cardRef.current) return
-    setIsHovered(true)
-    const r = cardRef.current.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width - 0.5
-    const y = (e.clientY - r.top) / r.height - 0.5
-    setRotateX(-y * (showAnswer ? 4 : 10))
-    setRotateY(x * (showAnswer ? 4 : 10))
-    setGlareX(x * 50 + 50)
-    setGlareY(y * 50 + 50)
+    pointerRef.current = { x: e.clientX, y: e.clientY }
+    if (rafRef.current) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null
+      const card = cardRef.current
+      const p = pointerRef.current
+      if (!card || !p) return
+      const r = card.getBoundingClientRect()
+      const x = (p.x - r.left) / r.width - 0.5
+      const y = (p.y - r.top) / r.height - 0.5
+      setIsHovered(true)
+      setRotateX(-y * (showAnswer ? 4 : 10))
+      setRotateY(x * (showAnswer ? 4 : 10))
+      setGlareX(x * 50 + 50)
+      setGlareY(y * 50 + 50)
+    })
   }
 
   const handleMouseLeave = () => {
+    pointerRef.current = null
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
     setIsHovered(false)
     setRotateX(0); setRotateY(0)
     setGlareX(50); setGlareY(50)

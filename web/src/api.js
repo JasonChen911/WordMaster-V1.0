@@ -59,6 +59,11 @@ export const api = {
   getWordFsrs: (id) => request(`/words/${id}/fsrs`),
   getAllWords: () => request('/words/all'),
 
+  // Unified study summary + ETA (shared with the homepage)
+  getStudySummary: () => request('/study/summary'),
+  getDailyGoal: () => request('/settings/daily-goal'),
+  setDailyGoal: (goal) => request(`/settings/daily-goal?goal=${goal}`, { method: 'POST' }),
+
   // Study
   recordStudy: (wordId, result, secondsSpent = 0, sessionId = '', responseTimeMs = 0) =>
     request('/study', {

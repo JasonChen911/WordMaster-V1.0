@@ -197,13 +197,9 @@ def _generate_study_queue_sql(db: Session, book_id_int: int, count: int = 20) ->
             queue.extend(by_id[i] for i in picked)
             used_ids.update(picked)
 
-    # Priority 3: Fill with remaining words — shuffled, same seed
-    if len(queue) < count:
-        needed = count - len(queue)
-        picked = _pick_ids([Word.id.notin_(used_ids)])[:needed]
-        if picked:
-            by_id = {w.id: w for w in db.query(Word).filter(Word.id.in_(picked)).all()}
-            queue.extend(by_id[i] for i in picked)
+    # (Priority 3 "fill with remaining words" removed: the study queue now
+    # contains only review-due + new words, so its length always matches the
+    # unified ETA's ``total_tasks`` — see ``study_summary.compute_study_summary``.)
 
     result = [_word_to_dict(w) for w in queue]
     _attach_sources(db, result)

@@ -50,8 +50,8 @@ export default function Dashboard() {
     )
   }
 
-  const tasks = home.today_tasks ?? 0
-  const minutes = home.estimated_minutes ?? 0
+  const tasks = home.remaining_tasks ?? home.total_tasks ?? 0
+  const etaText = home.display_text ?? ''
 
   return (
     <div className="page" style={{ maxWidth: 720, animation: 'fadeSlideIn 0.35s ease forwards' }}>
@@ -87,7 +87,7 @@ export default function Dashboard() {
           {tasks === 0 ? '今天的任务已完成' : `还有 ${tasks} 个学习任务`}
         </p>
         <p className="text-[13px] mb-5" style={{ color: 'var(--text-tertiary)' }}>
-          {tasks === 0 ? '去学习分析看看你的进步，或导入新材料继续学习。' : `预计约 ${minutes} 分钟`}
+          {tasks === 0 ? '去学习分析看看你的进步，或导入新材料继续学习。' : `预计 ${etaText}`}
         </p>
         <button onClick={() => navigate('/study')}
           style={{

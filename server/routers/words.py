@@ -21,6 +21,7 @@ from srs import (
 )
 from learning_events import log_event, RESULT_TO_RATING, RATING_TO_RESULT
 from mistakes import record_mistake, SOURCE_DAILY, TYPE_MEANING
+from study_summary import compute_study_summary, get_daily_goal, set_daily_goal
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,22 @@ def get_study_queue(
 @router.get("/api/words/all", response_model=list[WordOut])
 def get_all_words(db: Session = Depends(get_db)):
     return db.query(Word).order_by(Word.english.asc()).all()
+
+
+@router.get("/api/study/summary")
+def get_study_summary(db: Session = Depends(get_db)):
+    """Unified study-task summary + ETA (same numbers as the homepage)."""
+    return compute_study_summary(db)
+
+
+@router.get("/api/settings/daily-goal")
+def get_daily_goal_route(db: Session = Depends(get_db)):
+    return {"daily_goal": get_daily_goal(db)}
+
+
+@router.post("/api/settings/daily-goal")
+def set_daily_goal_route(goal: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
+    return {"daily_goal": set_daily_goal(db, goal)}
 
 
 @router.get("/api/words/{word_id}", response_model=WordOut)

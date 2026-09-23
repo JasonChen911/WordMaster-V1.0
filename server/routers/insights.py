@@ -164,26 +164,15 @@ def get_home(db: Session = Depends(get_db)):
     """Purpose-built homepage summary: answer "what should I learn today?"."""
     from core import _get_active_book_id, _book_id_str, _get_progress_stats_sql
     from models import Book
+    from study_summary import compute_study_summary
 
     bid = _get_active_book_id(db)
     stats = _get_progress_stats_sql(db, bid) if bid else {"total": 0, "new": 0, "review_due": 0, "studied": 0}
+    summary = compute_study_summary(db, bid)
 
     review_due = stats.get("review_due", 0)
     new_available = stats.get("new", 0)
     high_risk = len(_high_risk_words(db, limit=50))
-
-    # Today's tasks = due reviews + a batch of new words (capped at 20/day).
-    new_today = min(new_available, 20)
-    today_tasks = review_due + new_today
-
-    # Estimated minutes: 30s/word default, refined by real avg response time.
-    events = _event_stats(db)
-    avg_rt = events.get("avg_response_time_ms", 0)
-    if avg_rt > 0:
-        secs_per_word = max(10, avg_rt / 1000)
-    else:
-        secs_per_word = 30
-    estimated_minutes = round((today_tasks * secs_per_word) / 60)
 
     # Streak (consecutive active days).
     streak = 0
@@ -196,13 +185,11 @@ def get_home(db: Session = Depends(get_db)):
         else:
             break
 
+    events = _event_stats(db)
     book = db.query(Book).filter(Book.id == bid).first() if bid else None
     return {
         "review_due": review_due,
         "new_words": new_available,
-        "new_today": new_today,
-        "today_tasks": today_tasks,
-        "estimated_minutes": estimated_minutes,
         "high_risk": high_risk,
         "streak_days": streak,
         "active_book": {
@@ -211,6 +198,8 @@ def get_home(db: Session = Depends(get_db)):
             "word_count": book.word_count if book else 0,
         } if book else None,
         "insight_level": events.get("insight_level", "insufficient"),
+        # Unified ETA (single source of truth shared with the study page).
+        **summary,
     }
 
 

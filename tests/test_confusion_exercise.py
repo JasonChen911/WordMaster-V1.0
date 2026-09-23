@@ -78,8 +78,8 @@ check("avg_response_time_ms > 0", events.get("avg_response_time_ms", 0) > 0)
 check("error_breakdown has 'meaning'", "meaning" in events.get("error_breakdown", {}))
 
 home = client.get("/api/home").json()
-check("home has today_tasks", "today_tasks" in home)
-check("home has estimated_minutes", "estimated_minutes" in home)
+check("home has total_tasks", "total_tasks" in home)
+check("home has display_text", "display_text" in home)
 check("home streak is int", isinstance(home.get("streak_days"), int))
 
 # ── Summary ──
