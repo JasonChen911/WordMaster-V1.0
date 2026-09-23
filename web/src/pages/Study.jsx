@@ -47,6 +47,7 @@ export default function Study() {
   const [whyLoading, setWhyLoading] = useState(false)
   const cardStartTime = useRef(Date.now())
   const bookIdRef = useRef(null)
+  const sessionIdRef = useRef(`study-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
 
   // ── Load words ──
   const fetchWords = useCallback(async (bookId) => {
@@ -109,8 +110,9 @@ export default function Study() {
     if (!currentWord || animating) return
     setAnimating(true)
     const secondsSpent = Math.round((Date.now() - cardStartTime.current) / 1000)
+    const responseTimeMs = Date.now() - cardStartTime.current
     try {
-      const resp = await api.recordStudy(currentWord.english, result, secondsSpent)
+      const resp = await api.recordStudy(currentWord.english, result, secondsSpent, sessionIdRef.current, responseTimeMs)
       setSessionStats(prev => ({ ...prev, [result]: prev[result] + 1 }))
       setDailyCompleted(prev => prev + 1)
       setLastFsrs(resp?.fsrs || null)

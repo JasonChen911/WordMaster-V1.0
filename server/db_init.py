@@ -17,6 +17,7 @@ from models import (
     Word, StudyRecord, DailyStats, DictionaryEntry, Book, BookWord,
     WordAIExplanation, WordMemoryState, AIContentCache, ConfusionSet,
     SourceDocument, SourceWord, Course, Student, StudentWordStat,
+    LearningEvent,
 )
 from seed import WORDS, BUILTIN_BOOKS
 from confusion_seed import CONFUSION_SEED
@@ -718,6 +719,37 @@ def _migrate_existing(db):
 
     # Seed the clearly-labelled Local Classroom Demo data (idempotent).
     _seed_teacher_demo(db)
+
+    # ── v14.0: learning_events (unified learning behavior record) ──
+    _apply_migration(db, "v14.0_learning_events",
+        """CREATE TABLE IF NOT EXISTS learning_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            word_id INTEGER NOT NULL,
+            book_id INTEGER DEFAULT 0,
+            session_id TEXT DEFAULT '',
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            activity_type TEXT NOT NULL,
+            result TEXT DEFAULT '',
+            rating TEXT DEFAULT '',
+            response_time_ms INTEGER DEFAULT 0,
+            user_answer TEXT DEFAULT '',
+            correct_answer TEXT DEFAULT '',
+            error_type TEXT DEFAULT '',
+            source_type TEXT DEFAULT '',
+            source_id INTEGER DEFAULT 0,
+            fsrs_before TEXT DEFAULT '',
+            fsrs_after TEXT DEFAULT '',
+            client_version TEXT DEFAULT '',
+            algorithm_version TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
+    try:
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_learning_events_word_id ON learning_events (word_id)"))
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_learning_events_activity ON learning_events (activity_type)"))
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_learning_events_timestamp ON learning_events (timestamp)"))
+        db.commit()
+    except Exception:
+        db.rollback()
 
     # ── v12.0: source_documents + source_words (reading → vocab loop) ──
     _apply_migration(db, "v12.0_source_documents",

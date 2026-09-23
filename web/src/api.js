@@ -59,11 +59,17 @@ export const api = {
   getAllWords: () => request('/words/all'),
 
   // Study
-  recordStudy: (wordId, result, secondsSpent = 0) =>
+  recordStudy: (wordId, result, secondsSpent = 0, sessionId = '', responseTimeMs = 0) =>
     request('/study', {
       method: 'POST',
-      body: JSON.stringify({ word_id: wordId, result, seconds_spent: secondsSpent }),
+      body: JSON.stringify({ word_id: wordId, result, seconds_spent: secondsSpent, session_id: sessionId, response_time_ms: responseTimeMs }),
     }),
+
+  // Learning events (exercise / confusion / reading answers)
+  recordEvent: (event) => request('/events', {
+    method: 'POST',
+    body: JSON.stringify(event),
+  }),
 
   resetProgress: (bookId = null) => {
     const params = bookId ? `?book_id=${bookId}` : ''

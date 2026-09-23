@@ -260,6 +260,49 @@ class StudentWordStat(Base):
     )
 
 
+class LearningEvent(Base):
+    """A single, immutable, raw learning behavior record.
+
+    This is the *fact* layer: it stores what actually happened (activity type,
+    answer, rating, response time, FSRS before/after). AI insights are a
+    separate *interpretation* layer and are never mixed into these rows.
+    """
+    __tablename__ = "learning_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    word_id = Column(Integer, nullable=False, index=True)
+    book_id = Column(Integer, default=0, index=True)
+    session_id = Column(String, default="", index=True)
+    timestamp = Column(DateTime, default=func.now(), index=True)
+
+    # What kind of activity produced this event.
+    activity_type = Column(String, nullable=False, index=True)
+    # "new_word" | "review" | "meaning_choice" | "spelling" | "listening"
+    # | "context_fill" | "confusion_test" | "reading_lookup" | "exercise"
+
+    # Outcome.
+    result = Column(String, default="")            # "correct" | "incorrect"
+    rating = Column(String, default="")            # "again" | "hard" | "good" | "easy"
+    response_time_ms = Column(Integer, default=0)
+
+    user_answer = Column(String, default="")
+    correct_answer = Column(String, default="")
+    error_type = Column(String, default="")        # meaning|spelling|listening|context|confusion|timeout|none
+
+    # Where the event came from.
+    source_type = Column(String, default="")       # study|exercise|reading|confusion|material
+    source_id = Column(Integer, default=0)
+
+    # FSRS state snapshots (JSON strings).
+    fsrs_before = Column(String, default="")
+    fsrs_after = Column(String, default="")
+
+    client_version = Column(String, default="")
+    algorithm_version = Column(String, default="")
+
+    created_at = Column(DateTime, default=func.now())
+
+
 class WordMemoryState(Base):
     """FSRS adaptive memory state for a single word (one-to-one with ``words``).
 

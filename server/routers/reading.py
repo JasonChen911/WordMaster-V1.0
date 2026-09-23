@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Word, Book, SourceDocument, SourceWord
 from core import _get_active_book_id, _link_book_words
+from learning_events import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,18 @@ async def reading_add_word(request: Request, db: Session = Depends(get_db)):
     bid = _get_active_book_id(db)
     if bid:
         _link_book_words(db, bid, [(word.english, word.phonetic or "", word.chinese or "", word.example_en or "", word.example_cn or "")])
+
+    # Record the reading-lookup behavior as a learning event.
+    log_event(
+        db,
+        word_id=word.id,
+        book_id=bid or 0,
+        activity_type="reading_lookup",
+        result="",
+        source_type="reading",
+        source_id=doc.id,
+        user_answer=word.english,
+    )
 
     db.commit()
 

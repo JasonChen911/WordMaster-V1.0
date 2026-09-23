@@ -48,7 +48,7 @@ ROUTER_MODULES = [
 ]
 
 EXPECTED_ROUTE_COUNTS = {
-    "words": 8,
+    "words": 9,
     "stats": 5,
     "ai": 14,
     "books": 5,
@@ -79,7 +79,7 @@ for modname in ROUTER_MODULES:
     except Exception as e:  # noqa: BLE001
         check(f"{modname} imports cleanly", False, f"{type(e).__name__}: {e}")
 
-check("total router-declared routes == 62", total_routes == 62, f"got {total_routes}")
+check("total router-declared routes == 63", total_routes == 63, f"got {total_routes}")
 
 # ── 2. OpenAPI schema: all API paths present ──
 print()
@@ -101,6 +101,7 @@ EXPECTED_PATHS = [
     "/api/words/{word_id}/fsrs",
     "/api/study",
     "/api/study/reset",
+    "/api/events",
     "/api/words/{word_id}/favorite",
     "/api/games/words",
     "/api/stats",
@@ -158,7 +159,7 @@ EXPECTED_PATHS = [
 ]
 
 missing = [p for p in EXPECTED_PATHS if p not in paths]
-check("all 62 API paths present in schema", not missing, f"missing={missing}")
+check("all 63 API paths present in schema", not missing, f"missing={missing}")
 check("health present", "/health" in paths)
 
 api_path_count = len([p for p in paths if p.startswith("/api/")])

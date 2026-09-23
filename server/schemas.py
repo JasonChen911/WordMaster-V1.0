@@ -28,7 +28,9 @@ class WordOut(BaseModel):
 class StudyRequest(BaseModel):
     word_id: str  # English word text (string-based ID in JSON system)
     result: str  # "too_easy", "know", "fuzzy", "unknown"
-    seconds_spent: int = 0  # Time spent on this word in seconds
+    seconds_spent: int = 0  # Time spent on this word in seconds (legacy)
+    response_time_ms: int = 0  # Response time in milliseconds (Learning Event)
+    session_id: str = ""  # Optional study session identifier
 
 
 class StudyResponse(BaseModel):

@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -19,6 +19,7 @@ from srs import (
     proficiency_from_state,
     explain_state,
 )
+from learning_events import log_event, RESULT_TO_RATING, RATING_TO_RESULT
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,47 @@ def get_word_fsrs(word_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/api/events")
+async def record_event(request: Request, db: Session = Depends(get_db)):
+    """Record a non-review learning event (exercise/confusion/reading answer).
+
+    Body: {word, activity_type, result, user_answer, correct_answer,
+           error_type, response_time_ms, source_type, session_id}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"error": "请求体不是合法 JSON。"}
+
+    word_text = str(body.get("word") or "").strip().lower()
+    activity_type = str(body.get("activity_type") or "").strip()
+    if not word_text or not activity_type:
+        return {"error": "缺少 word 或 activity_type。"}
+
+    word = db.query(Word).filter(Word.english == word_text).first()
+    if not word:
+        return {"error": "Word not found"}
+
+    result = body.get("result", "")
+    log_event(
+        db,
+        word_id=word.id,
+        book_id=_get_active_book_id(db),
+        session_id=body.get("session_id", ""),
+        activity_type=activity_type,
+        result="correct" if result in ("correct", True) else ("incorrect" if result in ("incorrect", False) else str(result or "")),
+        rating="",
+        response_time_ms=int(body.get("response_time_ms") or 0),
+        user_answer=str(body.get("user_answer") or ""),
+        correct_answer=str(body.get("correct_answer") or ""),
+        error_type=str(body.get("error_type") or ""),
+        source_type=str(body.get("source_type") or "exercise"),
+        source_id=int(body.get("source_id") or 0),
+    )
+    db.commit()
+    return {"success": True}
+
+
 @router.post("/api/study")
 def record_study(req: StudyRequest, db: Session = Depends(get_db)):
     """Record a study result in SQLite."""
@@ -171,7 +213,7 @@ def record_study(req: StudyRequest, db: Session = Depends(get_db)):
         word.study_status = "learning"
     word.proficiency = proficiency_from_state(fsrs_state, mastered=mastered)
 
-    # ── Record study event ──
+    # ── Record study event (legacy, kept for compatibility) ──
     record = StudyRecord(
         word_id=word.id,
         book_id=bid,
@@ -179,6 +221,27 @@ def record_study(req: StudyRequest, db: Session = Depends(get_db)):
         review_stage=word.review_stage,
     )
     db.add(record)
+
+    # ── Record unified Learning Event (the fact layer) ──
+    rating = RESULT_TO_RATING.get(req.result, "")
+    log_event(
+        db,
+        word_id=word.id,
+        book_id=bid,
+        session_id=req.session_id or "",
+        activity_type="review",
+        result=RATING_TO_RESULT.get(rating, ""),
+        rating=rating,
+        response_time_ms=req.response_time_ms or (req.seconds_spent or 0) * 1000,
+        user_answer=req.result,
+        correct_answer="",
+        error_type="none" if rating in ("good", "easy") else "meaning",
+        source_type="study",
+        source_id=bid,
+        fsrs_before=current_state,
+        fsrs_after=fsrs_state,
+        algorithm_version="fsrs-5",
+    )
 
     # ── Update daily stats ──
     today_str = now.date().isoformat()

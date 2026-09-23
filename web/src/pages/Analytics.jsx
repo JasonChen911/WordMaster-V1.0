@@ -383,6 +383,30 @@ function StatCard({ icon: Icon, label, value, color }) {
 
 function ExerciseList({ questions, answers, setAnswers }) {
   if (!questions?.length) return <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>暂无练习。</p>
+
+  const handleAnswer = (qi, letter) => {
+    if (answers[qi] !== undefined) return
+    const q = questions[qi]
+    setAnswers((p) => ({ ...p, [qi]: letter }))
+    const isCorrect = letter === q.answer
+    const word = q.target_words?.[0] || ''
+    if (word) {
+      const activityType = q.type === 'spelling' ? 'spelling'
+        : q.type === 'discrimination' ? 'confusion_test'
+        : q.type === 'fill_blank' ? 'context_fill'
+        : 'meaning_choice'
+      api.recordEvent({
+        word,
+        activity_type: activityType,
+        result: isCorrect ? 'correct' : 'incorrect',
+        user_answer: letter,
+        correct_answer: q.answer || '',
+        error_type: isCorrect ? 'none' : (q.type === 'discrimination' ? 'confusion' : 'meaning'),
+        source_type: 'exercise',
+      }).catch(() => {})
+    }
+  }
+
   return (
     <div className="space-y-2">
       {questions.map((q, i) => {
@@ -398,7 +422,7 @@ function ExerciseList({ questions, answers, setAnswers }) {
                   const letter = String.fromCharCode(65 + oi)
                   const isSel = chosen === letter
                   return (
-                    <button key={oi} onClick={() => setAnswers((p) => ({ ...p, [i]: letter }))}
+                    <button key={oi} onClick={() => handleAnswer(i, letter)}
                       style={{
                         padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem',
                         backgroundColor: isSel ? 'var(--accent-subtle)' : 'var(--surface)',
