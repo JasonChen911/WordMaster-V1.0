@@ -38,6 +38,7 @@ async def material_analyze(request: Request):
     if ai_result is not None and ai_result.words:
         return {
             "candidates": [w.model_dump() for w in ai_result.words],
+            "document_summary": ai_result.document_summary,
             "ai_available": True,
             "source_text": text,
         }
@@ -75,7 +76,7 @@ async def material_import(request: Request, db: Session = Depends(get_db)):
         if not word or word in seen:
             continue
         seen.add(word)
-        meaning = str(w.get("meaning") or "").strip()
+        meaning = str(w.get("meaning_zh") or w.get("meaning") or "").strip()
         example = str(w.get("example") or "").strip()
         entries.append((word, "", meaning, example, ""))
 

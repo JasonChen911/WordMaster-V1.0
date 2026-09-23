@@ -70,15 +70,18 @@ def extract_candidates_local(text: str, max_words: int = 20) -> list[ExtractedWo
     counter = Counter(tokenize(cleaned))
     candidates = []
     for word, freq in counter.most_common(max_words):
-        importance = 5 if freq >= 4 else (4 if freq >= 3 else (3 if freq >= 2 else 2))
+        # Map frequency to a 0-1 importance score (heuristic, clearly non-AI).
+        importance = 0.9 if freq >= 4 else (0.75 if freq >= 3 else (0.6 if freq >= 2 else 0.4))
         candidates.append(ExtractedWord(
             word=word,
-            meaning="",
-            importance=importance,
-            difficulty=3,
+            lemma=word,
+            meaning_zh="",
+            importance=round(importance, 2),
+            difficulty="CET4",
             reason=f"在文中出现 {freq} 次（本地频率识别）",
             example="",
             source_sentence="",
+            tags=["本地识别"],
         ))
     return candidates
 
@@ -93,16 +96,18 @@ async def analyze_material(text: str, max_words: int = 30) -> MaterialAnalysis |
     context = cleaned[:6000]
 
     prompt = (
-        "你是一名英语词汇教学专家。下面是一篇英语学习材料。请从中挑选最值得学习的"
-        f"重点词汇（最多 {max_words} 个），优先挑选：\n"
+        "你是一名英语词汇教学专家。下面是一篇英语学习材料。请先写一句中文总结，"
+        f"再从中挑选最值得学习的重点词汇（最多 {max_words} 个），优先挑选：\n"
         "1. 考试高频词、学术词、对理解文章关键的重要词；\n"
         "2. 忽略 the/have/very 这类功能词和过于基础的词；\n"
         "3. 尽量给出一个符合难度的自然例句（英文）。\n\n"
-        "对每个词只输出一个 JSON 对象（不要输出 markdown 代码块），字段如下：\n"
-        '{"word":"单词","meaning":"中文释义","importance":1到5的整数,'
-        '"difficulty":1到5的整数,"reason":"为什么值得学（中文一句话）",'
-        '"example":"一个自然简洁的英文例句","source_sentence":"原文中出现该词的句子"}\n\n'
-        '请用 JSON 数组输出：{"words":[ {...}, {...} ]}\n'
+        "只输出一个 JSON 对象（不要输出 markdown 代码块），结构如下：\n"
+        '{"document_summary":"一句话中文总结","words":['
+        '{"word":"单词","lemma":"原形","meaning_zh":"中文释义","importance":0到1的小数,'
+        '"difficulty":"CET4或CET6或考研或高中或TOEFL","reason":"为什么值得学（中文一句话）",'
+        '"example":"一个自然简洁的英文例句","source_sentence":"原文中出现该词的句子",'
+        '"tags":["标签1","标签2"]}]}\n'
+        "importance 表示学习价值（1=必学，0=可忽略）。\n"
         f"材料原文：\n{context}"
     )
 

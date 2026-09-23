@@ -341,6 +341,13 @@ export default function Analytics() {
             ) : diagnosis.ai_available ? (
               <>
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{diagnosis.diagnosis}</p>
+                {diagnosis.confused_with?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {diagnosis.confused_with.map((c) => (
+                      <span key={c} className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--warning-subtle)', color: 'var(--warning)' }}>易混：{c}</span>
+                    ))}
+                  </div>
+                )}
                 {diagnosis.mistake_pattern && (
                   <div className="text-xs px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--surface-tertiary)' }}>
                     <span style={{ color: 'var(--text-tertiary)' }}>错误模式：</span>

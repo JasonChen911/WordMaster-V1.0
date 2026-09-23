@@ -53,20 +53,23 @@ check("non-JSON returns None", _extract_json("just some text") is None)
 
 # ── 3. Schema validation + repair ──
 print("\n=== 3. Schema validation + repair ===")
-valid = MaterialAnalysis(words=[{"word": "approach", "importance": 5, "difficulty": 4}])
+valid = MaterialAnalysis(words=[{"word": "approach", "importance": 0.9, "difficulty": "CET4"}])
 check("valid object validates", _validate(MaterialAnalysis, valid.model_dump()) is not None)
 
 # Model returns a bare list instead of {"words": [...]} — repair wraps it.
-bare = [{"word": "approach", "importance": 5}]
+bare = [{"word": "approach", "importance": 0.9}]
 repaired = _repair(MaterialAnalysis, bare)
 check("repair wraps a bare list", repaired is not None and repaired.words[0].word == "approach")
 
 # Correct object shape validates directly (no unwrapping needed).
-correct = {"words": [{"word": "approach", "importance": 5}]}
+correct = {"words": [{"word": "approach", "importance": 0.9}]}
 check("correct object shape validates", _validate(MaterialAnalysis, correct) is not None)
 
 # Bad type (importance not a number) — validation fails.
 check("invalid importance rejected", _validate(MaterialAnalysis, {"words": [{"word": "x", "importance": "not-a-number"}]}) is None)
+
+# Importance out of range (2.0 > 1.0) — validation fails.
+check("out-of-range importance rejected", _validate(MaterialAnalysis, {"words": [{"word": "x", "importance": 2.0}]}) is None)
 
 # ── 4. Text cleaning ──
 print("\n=== 4. Text cleaning ===")

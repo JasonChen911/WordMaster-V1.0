@@ -55,9 +55,14 @@ async def analyze_word_struggle(word_text: str, summary: dict) -> dict:
         f"- 遗忘（忘记）次数：{summary.get('lapse_count') or 0}\n"
         f"- 经常与之混淆的词：{confused_text}\n\n"
         "请基于这些真实数据诊断他记不住这个词的可能原因，并给出可操作的建议。\n"
+        "注意：你只能分析软件观察到的学习行为，不要做医学/心理诊断（如 ADHD、学习障碍等）。\n"
+        "措辞使用「根据当前学习记录」「可能」「看起来更像」。\n"
         "只输出一个 JSON 对象：\n"
         '{"diagnosis":"中文诊断（2-3句，基于数据）",'
         '"mistake_pattern":"错误模式（如拼写/选义/易混）",'
+        '"problem_type":"meaning或spelling或confusion或context",'
+        '"confused_with":["易混词1","易混词2"],'
+        '"recommended_exercise_type":"meaning_choice或spelling或context_fill或confusion_choice",'
         '"suggestions":["建议1","建议2","建议3"],'
         '"practice_sentence":"一个用于巩固该词的练习填空句（英文，留空用 ___）"}'
     )
@@ -88,6 +93,9 @@ async def analyze_word_struggle(word_text: str, summary: dict) -> dict:
         "ai_available": True,
         "diagnosis": result.diagnosis,
         "mistake_pattern": result.mistake_pattern,
+        "problem_type": result.problem_type,
+        "confused_with": result.confused_with,
+        "recommended_exercise_type": result.recommended_exercise_type,
         "suggestions": result.suggestions,
         "practice_sentence": result.practice_sentence,
         "insufficient_data": False,

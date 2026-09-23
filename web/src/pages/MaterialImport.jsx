@@ -19,6 +19,7 @@ export default function MaterialImport() {
   const [analyzing, setAnalyzing] = useState(false)
   const [candidates, setCandidates] = useState([])
   const [aiAvailable, setAiAvailable] = useState(true)
+  const [documentSummary, setDocumentSummary] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
@@ -36,6 +37,7 @@ export default function MaterialImport() {
       else {
         setCandidates(r.candidates || [])
         setAiAvailable(!!r.ai_available)
+        setDocumentSummary(r.document_summary || '')
         setNote(r.note || '')
         if (!r.bookName && !bookName.trim()) {
           setBookName('AI 学习词书')
@@ -84,7 +86,7 @@ export default function MaterialImport() {
     } finally { setImporting(false) }
   }
 
-  const importanceColor = (v) => v >= 5 ? 'var(--danger)' : v >= 4 ? 'var(--warning)' : 'var(--accent)'
+  const importanceColor = (v) => v >= 0.85 ? 'var(--danger)' : v >= 0.7 ? 'var(--warning)' : 'var(--accent)'
 
   return (
     <div className="page" style={{ maxWidth: 780, animation: 'fadeSlideIn 0.35s ease forwards' }}>
@@ -193,6 +195,16 @@ export default function MaterialImport() {
           backgroundColor: 'var(--surface-secondary)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius-xl)', padding: '1.25rem',
         }}>
+          {documentSummary && (
+            <div style={{
+              padding: '0.6rem 0.9rem', marginBottom: '0.85rem', borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--accent-subtle)', border: '1px solid color-mix(in srgb, var(--accent) 18%, transparent)',
+            }}>
+              <p className="text-[11px] font-semibold mb-0.5" style={{ color: 'var(--accent)' }}>AI 材料摘要</p>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{documentSummary}</p>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
               {aiAvailable ? 'AI 推荐重点词' : '候选词汇（本地识别）'}（{selected.size}/{candidates.length}）
@@ -221,12 +233,24 @@ export default function MaterialImport() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{c.word}</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '10px', color: importanceColor(c.importance) }}>
-                        <Star size={10} fill={importanceColor(c.importance)} /> 重要度 {c.importance}
+                        <Star size={10} fill={importanceColor(c.importance)} /> {Math.round((c.importance ?? 0) * 100)}%
                       </span>
+                      {c.difficulty && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'var(--surface-tertiary)', color: 'var(--text-tertiary)' }}>
+                          {c.difficulty}
+                        </span>
+                      )}
                     </div>
-                    {c.meaning && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{c.meaning}</p>}
+                    {(c.meaning_zh || c.meaning) && <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{c.meaning_zh || c.meaning}</p>}
                     {c.reason && <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{c.reason}</p>}
                     {c.example && <p className="text-[11px] mt-0.5 italic" style={{ color: 'var(--text-tertiary)' }}>"{c.example}"</p>}
+                    {c.tags?.length > 0 && (
+                      <div className="flex gap-1 mt-1">
+                        {c.tags.map((t) => (
+                          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'var(--accent-subtle)', color: 'var(--accent)' }}>{t}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </button>
               )
