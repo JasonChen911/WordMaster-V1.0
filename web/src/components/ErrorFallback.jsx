@@ -9,13 +9,15 @@ import { useState } from 'react'
  * Uses CSS custom properties (--surface, --text-primary, etc.) so it respects
  * the current light / dark theme.
  */
-export default function ErrorFallback({ error, onReset }) {
+export default function ErrorFallback({ error, onReset, recovering = false }) {
   const navigate = useNavigate()
   const [showDetail, setShowDetail] = useState(false)
 
+  const chunkError = window.wordmasterRecovery?.isChunkError(error)
   const errorMessage = error?.message || String(error ?? 'Unknown error')
 
   const handleGoHome = () => {
+    if (chunkError) { window.location.assign('/'); return }
     onReset?.()
     navigate('/', { replace: true })
   }
@@ -59,7 +61,7 @@ export default function ErrorFallback({ error, onReset }) {
           className="text-sm mb-6 leading-relaxed"
           style={{ color: 'var(--text-secondary)' }}
         >
-          应用在渲染时遇到了意外错误。你的学习数据是安全的，请尝试以下操作。
+          {recovering ? '界面资源更新后加载失败，WordMaster 正在尝试自动恢复。' : chunkError ? '界面资源自动恢复失败，请刷新页面或回首页。' : '应用在渲染时遇到了意外错误。你的学习数据是安全的，请尝试以下操作。'}
         </p>
 
         {/* Error detail (collapsible) */}
@@ -88,7 +90,7 @@ export default function ErrorFallback({ error, onReset }) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex gap-3" style={{ display: recovering ? 'none' : undefined }}>
           <button
             onClick={handleGoHome}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 active:scale-95"

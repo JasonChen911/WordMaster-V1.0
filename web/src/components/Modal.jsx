@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -6,6 +7,12 @@ import { X } from 'lucide-react'
  *
  * Enter: opacity 0→1, scale 0.95→1 (300ms)
  * Exit:  opacity 1→0, scale 1→0.96 (200ms)
+ *
+ * Rendered via a portal onto document.body so the `position: fixed` overlay is
+ * always relative to the *viewport*. Without this, any ancestor that keeps a
+ * transform (e.g. the `.page` fade-in animation's retained `translateY`) becomes
+ * the containing block for `fixed`, and the panel centers against the tall,
+ * scrollable page instead of the visible window.
  *
  * Usage:
  *   <Modal open={show} onClose={fn}
@@ -39,6 +46,15 @@ export default function Modal({
     }
   }, [open])
 
+  // Lock the background scroll while the modal is mounted, then restore it on
+  // close. The previous value is saved so nested/other overlays are untouched.
+  useEffect(() => {
+    if (!visible) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [visible])
+
   const handleClose = useCallback(() => {
     setExiting(true)
     setTimeout(() => { setVisible(false); setExiting(false); onClose?.() }, 220)
@@ -46,7 +62,7 @@ export default function Modal({
 
   if (!visible) return null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-6 anim-overlay"
       style={{
@@ -59,7 +75,7 @@ export default function Modal({
       onClick={handleClose}
     >
       <div
-        className="rounded-2xl p-6 max-w-sm w-full"
+        className="rounded-2xl p-6 max-w-sm w-full max-h-[85vh] overflow-y-auto"
         style={{
           backgroundColor: 'var(--surface-secondary)',
           border: '1px solid var(--border)',
@@ -123,7 +139,8 @@ export default function Modal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

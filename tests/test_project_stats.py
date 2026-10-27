@@ -36,22 +36,22 @@ print("  PROJECT FACTS CONSISTENCY TEST")
 print("=" * 60)
 
 api_total, health, static, per_module = collect_routes()
-check("47 /api/* routes", api_total == 47, f"got {api_total}")
+check("72 /api/* routes", api_total == 72, f"got {api_total}")
 check("1 /health route", health == 1, f"got {health}")
-check("2 static/SPA fallbacks", static == 2, f"got {static}")
-check("9 router modules", len(per_module) == 9, f"got {len(per_module)}")
+check("0 static/SPA fallback decorators", static == 0, f"got {static}")
+check("14 router modules", len(per_module) == 14, f"got {len(per_module)}")
 
 business_tables, core_tables = collect_tables()
 if business_tables is not None:
-    check("8 business tables", len(core_tables) == 8, f"got {len(core_tables)}")
-    check("9 tables incl schema_version", len(business_tables) == 9,
+    check("18 business tables", len(core_tables) == 18, f"got {len(core_tables)}")
+    check("19 tables incl schema_version", len(business_tables) == 19,
           f"got {len(business_tables)}")
     check("sqlite_sequence excluded", "sqlite_sequence" not in business_tables)
 
 page_files, primary_routes, all_routes = collect_pages()
-check("10 primary pages", len(primary_routes) == 10, f"got {len(primary_routes)}")
-check("13 page components", len(page_files) == 13, f"got {len(page_files)}")
-check("13 frontend routes", len(all_routes) == 13, f"got {len(all_routes)}")
+check("13 primary pages", len(primary_routes) == 13, f"got {len(primary_routes)}")
+check("16 page components", len(page_files) == 16, f"got {len(page_files)}")
+check("16 frontend routes", len(all_routes) == 16, f"got {len(all_routes)}")
 
 # Review schedule: 7 stages, no 90-day stage.
 core_text = (ROOT / "server" / "core.py").read_text(encoding="utf-8", errors="ignore")

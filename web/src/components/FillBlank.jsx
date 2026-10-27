@@ -5,7 +5,7 @@ import {
   BookOpen, Zap, Volume2, ChevronRight, RotateCcw,
 } from 'lucide-react'
 import { api } from '../api'
-import { speak } from '../tts'
+import { speak, stop as stopTts } from '../tts'
 
 // ═══════════════════════════════════════════════════════════════
 // Web Audio — comprehensive game sound system
@@ -157,6 +157,37 @@ function computeMask(word) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// KeyHint — refined keycap + function label for the bottom shortcuts
+// ═══════════════════════════════════════════════════════════════
+// Enter/Esc are rendered as small keyboard keycaps (light fill, hairline
+// border, subtle bottom edge) paired with the action text in the UI font.
+// This keeps them clearly legible without competing with the "检查答案" button.
+function KeyHint({ keys, label, accent = false }) {
+  return (
+    <span className="inline-flex items-center gap-1.5" style={{ height: '1.75rem' }}>
+      <kbd className="inline-flex items-center justify-center"
+        style={{
+          minWidth: '1.9rem', height: '1.6rem', padding: '0 0.42rem',
+          borderRadius: '0.4rem',
+          backgroundColor: accent ? 'var(--accent-subtle)' : 'var(--surface-secondary)',
+          border: `1px solid ${accent ? 'color-mix(in srgb, var(--accent) 22%, transparent)' : 'var(--border-strong)'}`,
+          boxShadow: '0 1px 0 var(--border-strong)',
+          fontSize: '0.6875rem', fontWeight: 600, letterSpacing: '0.04em',
+          color: accent ? 'var(--accent)' : 'var(--text-secondary)',
+          fontFamily: 'inherit',
+          lineHeight: 1,
+          userSelect: 'none',
+        }}>
+        {keys}
+      </kbd>
+      <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-tertiary)', lineHeight: 1 }}>
+        {label}
+      </span>
+    </span>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
 // FillBlank Component
 // ═══════════════════════════════════════════════════════════════
 export default function FillBlank({ onBack }) {
@@ -193,6 +224,8 @@ export default function FillBlank({ onBack }) {
   const comboPopupTimer = useRef(null)
   const autoAdvanceTimer = useRef(null)
   const canAdvance = useRef(false)
+  const exitedRef = useRef(false)   // set true when the player leaves the game
+  const roundRef = useRef(0)        // monotonic round id — stale fetches are dropped
 
   // ── Cleanup ──
   useEffect(() => {
@@ -242,7 +275,7 @@ export default function FillBlank({ onBack }) {
         handleRestart()
       } else if (e.key === 'Escape') {
         e.preventDefault()
-        onBack()
+        handleExit()
       }
     }
     window.addEventListener('keydown', handler)
@@ -255,12 +288,35 @@ export default function FillBlank({ onBack }) {
   const GAME_SIZE = 10
 
   // ── Load words from the active book (same as Study page) ──
+  // This is the single "start a new round" entry point. Every restart must
+  // fully reset round-level state — most importantly `index` — otherwise the
+  // next round renders `current = words[staleIndex] = undefined`, which breaks
+  // the Chinese hint, the 提示/检查答案 buttons, and 下一题 (the "再来一轮" freeze).
   const loadGameWords = async (book) => {
+    const round = ++roundRef.current
     setLoading(true)
     playStartSound()
 
+    // ── Full round reset: never inherit stale index / timers / input state ──
+    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current)
+    if (letterTimer.current) clearInterval(letterTimer.current)
+    canAdvance.current = false
+    setIndex(0)
+    setWords([])
+    setMask(null)
+    setUserInput('')
+    setResult(null)
+    setShowWord(false)
+    setAnswerShake(false)
+    setLettersVisible([])
+    setScore(0)
+    setTotal(0)
+    setCombo(0)
+    setBestCombo(0)
+
     try {
       const data = await api.getGamesWords(Math.max(40, GAME_SIZE * 4), book.id)
+      if (exitedRef.current || roundRef.current !== round) return  // stale fetch after exit / newer round
       const allWords = (data.words || []).filter(w =>
         w.english && w.english.length >= 2 && w.chinese
       )
@@ -272,30 +328,44 @@ export default function FillBlank({ onBack }) {
         }
         const selected = shuffled.slice(0, GAME_SIZE)
         setWords(selected)
-        setScore(0); setTotal(0); setCombo(0); setBestCombo(0)
         setPhase('playing')
         startRound(selected, 0)
       } else {
         setPhase('loading')  // stay — will show "no words" UI
       }
     } catch (err) {
+      if (exitedRef.current || roundRef.current !== round) return
       console.error('FillBlank load error:', err)
+      setPhase('loading')
     }
+    if (exitedRef.current || roundRef.current !== round) return
     setLoading(false)
   }
 
   // ── Restart with same book ──
   const handleRestart = () => {
-    setWords([])
-    setMask(null)
-    setUserInput('')
-    setResult(null)
-    setCombo(0)
-    setBestCombo(0)
     setPhase('loading')
     if (activeBook) {
       loadGameWords(activeBook)
+    } else {
+      // No active book → reset everything so the "no book" screen is clean.
+      setWords([]); setIndex(0); setMask(null); setUserInput('')
+      setResult(null); setScore(0); setTotal(0); setCombo(0); setBestCombo(0)
     }
+  }
+
+  // ── Exit: leave the game and return to the game-select page ──
+  // Fully separated from handleRestart so "退出" never re-initialises the game.
+  // Cancels all timers, stops TTS, invalidates any in-flight word fetch, then
+  // unmounts via onBack — never touches the user's study progress or word bank.
+  const handleExit = () => {
+    exitedRef.current = true
+    roundRef.current++            // drop any in-flight getGamesWords result
+    if (letterTimer.current) clearInterval(letterTimer.current)
+    if (comboPopupTimer.current) clearTimeout(comboPopupTimer.current)
+    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current)
+    stopTts()                     // stop any example-sentence audio
+    onBack()
   }
 
   // ═══════════════════════════════════════
@@ -409,7 +479,7 @@ export default function FillBlank({ onBack }) {
       }
     } else if (e.key === 'Escape') {
       e.preventDefault()
-      handleRestart()
+      handleExit()
     }
   }
 
@@ -420,7 +490,7 @@ export default function FillBlank({ onBack }) {
     return (
       <div className="page" style={{ paddingTop: '2rem' }}>
         <div className="flex items-center gap-3 mb-8">
-          <button onClick={onBack} className="ios-icon-button"><ArrowLeft size={19} /></button>
+          <button onClick={handleExit} className="ios-icon-button"><ArrowLeft size={19} /></button>
           <BookOpen size={20} style={{ color: 'var(--accent)' }} />
           <h2 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>
             挖空填词
@@ -440,7 +510,7 @@ export default function FillBlank({ onBack }) {
             背单词、复习、小游戏均使用统一词书。
           </p>
           <div className="flex gap-3 justify-center">
-            <button onClick={onBack}
+            <button onClick={handleExit}
               className="ios-button ios-button-secondary" style={{ borderRadius: 'var(--radius-md)' }}>
               <ArrowLeft size={15} /> 返回
             </button>
@@ -492,21 +562,15 @@ export default function FillBlank({ onBack }) {
               className="ios-button ios-button-secondary gap-2" style={{ borderRadius: 'var(--radius-md)' }}>
               <RotateCcw size={14} /> 再来一轮
             </button>
-            <button onClick={onBack}
+            <button onClick={handleExit}
               className="ios-button ios-button-primary gap-2" style={{ borderRadius: 'var(--radius-md)' }}>
               <ArrowLeft size={14} /> 返回
             </button>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mt-5">
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--accent)', backgroundColor: 'var(--accent-subtle)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)' }}>
-              Enter 再来一轮
-            </kbd>
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--surface-tertiary)', border: '1px solid var(--border)' }}>
-              Esc 返回选择
-            </kbd>
+          <div className="flex items-center justify-center gap-5 mt-4">
+            <KeyHint keys="Enter" label="再来一轮" accent />
+            <KeyHint keys="Esc" label="返回选择" />
           </div>
         </div>
       </div>
@@ -569,7 +633,7 @@ export default function FillBlank({ onBack }) {
       {/* ═══ Top Bar ═══ */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <button onClick={handleRestart} className="ios-icon-button" aria-label="Back">
+          <button onClick={handleExit} className="ios-icon-button" aria-label="Back">
             <ArrowLeft size={19} />
           </button>
           <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
@@ -770,28 +834,16 @@ export default function FillBlank({ onBack }) {
       </div>
 
       {/* ═══ Keyboard hints ═══ */}
-      <div className="flex items-center justify-center gap-4 mt-5">
+      <div className="flex items-center justify-center gap-5 mt-4">
         {!result ? (
           <>
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--surface-tertiary)', border: '1px solid var(--border)' }}>
-              Enter 提交
-            </kbd>
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--surface-tertiary)', border: '1px solid var(--border)' }}>
-              Esc 返回
-            </kbd>
+            <KeyHint keys="Enter" label="提交" />
+            <KeyHint keys="Esc" label="返回" />
           </>
         ) : (
           <>
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--accent)', backgroundColor: 'var(--accent-subtle)', border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)' }}>
-              Enter 下一题
-            </kbd>
-            <kbd className="text-[10px] px-2 py-0.5 rounded font-medium"
-              style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--surface-tertiary)', border: '1px solid var(--border)' }}>
-              Esc 返回
-            </kbd>
+            <KeyHint keys="Enter" label="下一题" accent />
+            <KeyHint keys="Esc" label="返回" />
           </>
         )}
       </div>

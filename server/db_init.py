@@ -94,6 +94,18 @@ def init_db():
                 _set_setting(db, "active_book", active_str)
                 db.commit()
 
+        # Idempotent data-hygiene pass: back-fill blank meanings and merge any
+        # case-insensitive duplicate words. Never deletes user study data.
+        try:
+            from repair import repair_data
+            report = repair_data(db)
+            db.commit()
+            if any(v for v in report.values()):
+                logger.info("Data repair applied: %s", report)
+        except Exception as exc:  # noqa: BLE001 — hygiene must never block startup
+            db.rollback()
+            logger.warning("Data repair skipped: %s", exc)
+
         _log_startup_debug(db)
     finally:
         db.close()

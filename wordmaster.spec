@@ -21,13 +21,23 @@ WEB_DIST = ROOT / 'web' / 'dist'
 RESOURCES = ROOT / 'resources'
 
 # ── Collect frontend dist files → web/ ──
+sys.path.insert(0, str(SERVER))
+from frontend_assets import FrontendBundle
+frontend_bundle = FrontendBundle(WEB_DIST)
+import tempfile
+(ROOT / 'build').mkdir(exist_ok=True)
+frontend_stage = Path(tempfile.mkdtemp(prefix='frontend-', dir=ROOT / 'build'))
+for name, content in frontend_bundle.files.items():
+    target = frontend_stage / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+manifest_name = f'build-{frontend_bundle.build_id}.json'
+(frontend_stage / manifest_name).write_bytes((WEB_DIST / manifest_name).read_bytes())
 frontend_datas = []
-if WEB_DIST.exists():
-    for f in WEB_DIST.rglob('*'):
-        if f.is_file():
-            frontend_datas.append(
-                (str(f), str(Path('web') / f.relative_to(WEB_DIST).parent))
-            )
+for name in [*frontend_bundle.files, f'build-{frontend_bundle.build_id}.json']:
+    f = frontend_stage / name
+    frontend_datas.append((str(f), str(Path('web') / f.relative_to(frontend_stage).parent)))
+print(f'Packaging verified frontend {frontend_bundle.build_id}')
 
 # ── Collect server Python files → server/ ──
 server_datas = []
@@ -138,6 +148,8 @@ a = Analysis(
         'mdx_reader',
         'core',
         'db_init',
+        'morphology',
+        'repair',
         # Router modules
         'routers',
         'routers.words',
@@ -205,3 +217,11 @@ exe = EXE(
     icon=str(icon_path) if icon_path else None,
     version=str(version_path) if version_path.exists() else None,
 )
+
+# Installer refuses an EXE that does not match this verified build.
+import hashlib, json
+built_exe = Path(DISTPATH) / 'WordMaster.exe'
+(Path(DISTPATH) / 'WordMaster.build.json').write_text(json.dumps({
+    'build_id': frontend_bundle.build_id,
+    'exe_sha256': hashlib.sha256(built_exe.read_bytes()).hexdigest(),
+}), encoding='utf-8')

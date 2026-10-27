@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, CheckCircle2, HelpCircle, XCircle, Sparkles, RefreshCw,
   Zap, Trophy, BookOpen, RotateCcw, Gamepad2, Brain,
 } from 'lucide-react'
 import { api } from '../api'
-import { speak, preloadQueue, getAutoPlay, stop as stopTts } from '../tts'
+import { speakWord, preloadQueue, getAutoPlay, stop as stopTts } from '../tts'
 import WordCard from '../components/WordCard'
 import Modal, { AlertModal } from '../components/Modal'
 import Celebration from '../components/Celebration'
@@ -26,6 +26,8 @@ const ANSWER_BUTTONS = [
 
 export default function Study() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const focusedWordId = searchParams.get('word_id')
   const [words, setWords] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
@@ -64,13 +66,13 @@ export default function Study() {
   const fetchWords = useCallback(async (bookId, goal) => {
     setLoading(true); setError(null)
     try {
-      const data = await api.getStudyQueue(bookId, goal)
+      const data = focusedWordId ? [await api.getWord(focusedWordId)] : await api.getStudyQueue(bookId, goal)
       setWords(data)
     } catch (e) {
       setError('Failed to load words.')
       console.error(e)
     } finally { setLoading(false) }
-  }, [])
+  }, [focusedWordId])
 
   // ── Init ──
   useEffect(() => {
@@ -181,7 +183,7 @@ export default function Study() {
   // ── Auto-play the new word once its card has transitioned ──
   useEffect(() => {
     if (!currentWord || !getAutoPlay()) return
-    const t = setTimeout(() => speak(currentWord.english), 420)
+    const t = setTimeout(() => speakWord(currentWord.english), 420)
     return () => clearTimeout(t)
   }, [currentWord?.english])
 
@@ -244,6 +246,30 @@ export default function Study() {
     }
   }
 
+  // Reset confirmation + result alert are shared by every render branch that
+  // shows the "重置学习进度" button (notably the "全部完成" empty state), so
+  // they are declared once here instead of only inside the main study view.
+  const resetModals = (
+    <>
+      <Modal
+        open={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        title="重置学习进度？"
+        message={'确定要重置「' + (activeBook?.book_name || '当前词书') + '」的学习进度吗？\n\n清除：\n已学单词 · 记忆状态 · 复习记录 · 今日记录\n\n保留：\n词书 · 单词数据\n\n仅当前词书回到 0 进度，其他词书不受影响。'}
+        confirmLabel="确认重置"
+        cancelLabel="取消"
+        onConfirm={doReset}
+        danger
+      />
+      <AlertModal
+        open={!!alertMsg}
+        onClose={() => setAlertMsg(null)}
+        title="提示"
+        message={alertMsg || ''}
+      />
+    </>
+  )
+
   // ═══════════════════════════════════════
   // Loading
   // ═══════════════════════════════════════
@@ -283,32 +309,35 @@ export default function Study() {
   // ═══════════════════════════════════════
   if (words.length === 0 && !loading) {
     return (
-      <div className="page flex items-center justify-center min-h-[70vh]">
-        <div className="text-center max-w-sm">
-          <div className="w-20 h-20 rounded-[20px] flex items-center justify-center mx-auto mb-6"
-            style={{ backgroundColor: 'var(--accent-subtle)' }}>
-            <Trophy size={36} style={{ color: 'var(--accent)' }} />
-          </div>
-          <h2 className="text-xl font-bold mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            全部完成！
-          </h2>
-          <p className="text-sm mb-8 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            {activeBook
-              ? `${activeBook.book_name} — 暂无需要复习的单词`
-              : '暂无需要复习的单词'}
-          </p>
-          <div className="flex flex-col gap-3 items-center">
-            <button onClick={() => navigate('/')}
-              className="ios-button ios-button-secondary"
-              style={{ borderRadius: 'var(--radius-md)', minWidth: '12rem' }}>返回首页</button>
-            <button onClick={handleReset}
-              className="text-xs flex items-center gap-1.5 transition-all hover:opacity-70"
-              style={{ color: 'var(--text-tertiary)' }}>
-              <RotateCcw size={12} /> 重置学习进度
-            </button>
+      <>
+        <div className="page flex items-center justify-center min-h-[70vh]">
+          <div className="text-center max-w-sm">
+            <div className="w-20 h-20 rounded-[20px] flex items-center justify-center mx-auto mb-6"
+              style={{ backgroundColor: 'var(--accent-subtle)' }}>
+              <Trophy size={36} style={{ color: 'var(--accent)' }} />
+            </div>
+            <h2 className="text-xl font-bold mb-2 tracking-tight" style={{ color: 'var(--text-primary)' }}>
+              全部完成！
+            </h2>
+            <p className="text-sm mb-8 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              {activeBook
+                ? `${activeBook.book_name} — 暂无需要复习的单词`
+                : '暂无需要复习的单词'}
+            </p>
+            <div className="flex flex-col gap-3 items-center">
+              <button onClick={() => navigate('/')}
+                className="ios-button ios-button-secondary"
+                style={{ borderRadius: 'var(--radius-md)', minWidth: '12rem' }}>返回首页</button>
+              <button onClick={handleReset}
+                className="text-xs flex items-center gap-1.5 transition-all hover:opacity-70"
+                style={{ color: 'var(--text-tertiary)' }}>
+                <RotateCcw size={12} /> 重置学习进度
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+        {resetModals}
+      </>
     )
   }
 
@@ -412,6 +441,7 @@ export default function Study() {
           <button onClick={() => navigate('/')} className="ios-icon-button" aria-label="Back">
             <ArrowLeft size={19} />
           </button>
+          <button onClick={() => navigate('/mistakes')} className="ios-icon-button" title="错词本" aria-label="错词本"><BookOpen size={17} /></button>
           <button onClick={() => navigate('/games')} className="ios-icon-button" title="小游戏"
             style={{ color: 'var(--accent)' }}>
             <Gamepad2 size={17} />
@@ -575,24 +605,7 @@ export default function Study() {
         )}
       </Modal>
 
-      {/* ═══ Reset Modal ═══ */}
-      <Modal
-        open={showResetModal}
-        onClose={() => setShowResetModal(false)}
-        title="重置学习进度？"
-        message={'确定要重置所有学习进度吗？\n\n清除：\n已学单词 · 记忆状态 · 复习记录 · 今日记录\n\n保留：\n词书 · 单词数据\n\n所有词书回到 0 进度。'}
-        confirmLabel="确认重置"
-        cancelLabel="取消"
-        onConfirm={doReset}
-        danger
-      />
-
-      <AlertModal
-        open={!!alertMsg}
-        onClose={() => setAlertMsg(null)}
-        title="提示"
-        message={alertMsg || ''}
-      />
+      {resetModals}
     </div>
   )
 }

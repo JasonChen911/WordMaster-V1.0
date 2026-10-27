@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { ArrowLeft, ArrowRight, CheckCircle2, RefreshCw, Sparkles, AlertCircle, BookOpen } from 'lucide-react'
 import { api } from '../api'
+import { shuffle, preparePuzzleWords } from '../gameWordPicker'
 
 // ═══════════════════════════════════════════════════════════════
 // Web Audio — gentle two-tone success chime (C5→E5, fast fade)
@@ -72,25 +73,6 @@ function spawnSuccessParticles(x, y, count = 8) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════
-function shuffle(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-function pickWords(words) {
-  return words.filter(w => {
-    const unique = new Set(w.english.toLowerCase().replace(/[^a-z]/g, ''))
-    return unique.size >= 3 && w.english.length >= 3 && w.english.length <= 12
-  })
-}
-
-// ═══════════════════════════════════════════════════════════════
 // WordPuzzle Component
 // ═══════════════════════════════════════════════════════════════
 export default function WordPuzzle({ onBack }) {
@@ -119,6 +101,8 @@ export default function WordPuzzle({ onBack }) {
   const dragOverItem = useRef(null)
   const answerRef = useRef(null)
   const nextAnimTimer = useRef(null)
+  const roundRef = useRef(null)
+  const [saveState, setSaveState] = useState('idle')
 
   // ── Cleanup timers ──
   useEffect(() => {
@@ -137,10 +121,13 @@ export default function WordPuzzle({ onBack }) {
         if (book) {
           const data = await api.getGamesWords(30, book.id)
           if (cancelled) return
-          const valid = pickWords(data.words || [])
-          if (valid.length > 0) {
-            setWords(valid)
-            initRound(valid, 0)
+          // Build a fresh shuffled pool for this session — the first question
+          // is drawn by the same shuffle-and-walk logic as every later one, so
+          // no single word (e.g. "associate") can ever be pinned to position 0.
+          const pool = preparePuzzleWords(data.words || [])
+          if (pool.length > 0) {
+            setWords(pool)
+            initRound(pool, 0)
           }
         }
         setLoading(false)
@@ -160,6 +147,8 @@ export default function WordPuzzle({ onBack }) {
       setCompleted(true)
       return
     }
+    roundRef.current = { token: crypto.randomUUID(), settled: false, saving: false }
+    setSaveState('idle')
     const word = wordList[idx]
     const chars = word.english.toLowerCase().replace(/[^a-z]/g, '').split('')
     let shuffled
@@ -177,9 +166,10 @@ export default function WordPuzzle({ onBack }) {
   const placedWord = placed.map(i => letters[i]).join('')
 
   // ── Drag handlers ──
-  const handleDragStart = (i) => { dragItem.current = i }
+  const handleDragStart = (i) => { if (!roundRef.current?.settled) dragItem.current = i }
   const handleDragEnter = (i) => { dragOverItem.current = i }
   const handleDragEnd = () => {
+    if (roundRef.current?.settled) return
     const from = dragItem.current
     const to = dragOverItem.current
     if (from === null || to === null || from === to) {
@@ -194,6 +184,7 @@ export default function WordPuzzle({ onBack }) {
 
   // ── Letter click with animation ──
   const handleLetterClick = (i) => {
+    if (roundRef.current?.settled) return
     // Visual press feedback
     setPressingTile(i)
     setTimeout(() => setPressingTile(null), 180)
@@ -208,8 +199,23 @@ export default function WordPuzzle({ onBack }) {
     }
   }
 
+  const saveMistake = async () => {
+    const round = roundRef.current
+    if (!current || !round || round.saving) return
+    round.saving = true
+    setSaveState('saving')
+    try {
+      await api.recordMistake(current.id, 'game', 'spelling', round.token)
+      if (roundRef.current === round) setSaveState('saved')
+    } catch (_) {
+      if (roundRef.current === round) setSaveState('error')
+    } finally { round.saving = false }
+  }
+
   // ── Check answer ──
   const handleCheck = () => {
+    if (!current || !placed.length || roundRef.current?.settled) return
+    roundRef.current.settled = true
     const answer = placedWord.toLowerCase()
     const target = current.english.toLowerCase().replace(/[^a-z]/g, '')
     setTotal(prev => prev + 1)
@@ -232,12 +238,13 @@ export default function WordPuzzle({ onBack }) {
       setAnswerShake(true)
       setTimeout(() => setAnswerShake(false), 450)
       // Record the wrong spelling into the mistake book (source = game).
-      api.recordMistake(current.english, 'game', 'spelling').catch(() => {})
+      saveMistake()
     }
   }
 
   // ── Next word ──
   const handleNext = () => {
+    if (!roundRef.current?.settled || (result === 'wrong' && saveState !== 'saved')) return
     if (nextAnimTimer.current) clearTimeout(nextAnimTimer.current)
     const nextIdx = index + 1
     setIndex(nextIdx)
@@ -245,6 +252,7 @@ export default function WordPuzzle({ onBack }) {
   }
 
   const handleReshuffle = () => {
+    if (roundRef.current?.settled) return
     const chars = current.english.toLowerCase().replace(/[^a-z]/g, '').split('')
     let newLetters
     do { newLetters = shuffle(chars) } while (newLetters.join('') === chars.join('') && chars.length > 2)
@@ -425,7 +433,7 @@ export default function WordPuzzle({ onBack }) {
       {/* ═══ Word Display: full word on correct, letter tiles otherwise ═══ */}
       <div className="flex justify-center mb-6" ref={answerRef}>
         {result === 'correct' ? (
-          <div className="text-center animate-scale-in" style={{ width: '100%' }}>
+          <div className="text-center animate-scale-in" role="status" aria-live="polite" style={{ width: '100%' }}>
             <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--success)' }}>
               正确单词
             </p>
@@ -433,7 +441,8 @@ export default function WordPuzzle({ onBack }) {
               display: 'inline-block', padding: '0.5rem 1.5rem',
               borderRadius: 'var(--radius-lg)',
               backgroundColor: 'var(--success-subtle)', border: '1.5px solid var(--success)',
-              fontSize: '2.5rem', fontWeight: 800, letterSpacing: '0.02em',
+              fontSize: 'clamp(1.75rem, 6vw, 2.75rem)', fontWeight: 800, letterSpacing: '0.02em',
+              maxWidth: '100%', overflowWrap: 'anywhere',
               color: 'var(--text-primary)',
               animation: 'scaleIn 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) forwards',
             }}>
@@ -504,7 +513,12 @@ export default function WordPuzzle({ onBack }) {
           return (
             <div
               key={i}
-              draggable
+              draggable={!result}
+              role="button"
+              tabIndex={result ? -1 : 0}
+              aria-label={`字母 ${letter.toUpperCase()}`}
+              aria-disabled={!!result}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleLetterClick(i) } }}
               onDragStart={() => handleDragStart(i)}
               onDragEnter={() => handleDragEnter(i)}
               onDragEnd={handleDragEnd}
@@ -539,6 +553,14 @@ export default function WordPuzzle({ onBack }) {
       </div>
       )}
 
+      {result === 'wrong' && (
+        <div className="text-center text-sm mb-4" role="status">
+          {saveState === 'saving' && '正在保存到错词本…'}
+          {saveState === 'saved' && '已记入错词本 · 游戏错误'}
+          {saveState === 'error' && <><span>保存失败，请重试后继续。</span> <button className="ios-button ios-button-secondary" onClick={saveMistake}>重试保存</button></>}
+        </div>
+      )}
+
       {/* ═══ Action Buttons ═══ */}
       <div className="flex items-center justify-center gap-3">
         <button onClick={handleReshuffle}
@@ -557,6 +579,7 @@ export default function WordPuzzle({ onBack }) {
           </button>
         ) : (
           <button onClick={handleNext}
+            disabled={result === 'wrong' && saveState !== 'saved'}
             className="ios-button ios-button-primary gap-2 text-sm"
             style={{ borderRadius: 'var(--radius-md)', animation: 'scaleIn 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards' }}>
             {result === 'correct' ? '下一题' : '跳过'} <ArrowRight size={14} />

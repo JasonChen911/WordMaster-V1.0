@@ -79,7 +79,7 @@ export default function Games() {
       {/* Info footer */}
       <div className="mt-10 text-center">
         <p className="text-xs" style={{ color: 'var(--text-tertiary)', opacity: 0.5 }}>
-          游戏数据来自当前词书 · 不影响学习记录
+          游戏数据来自当前词书 · 拼词错误会记入错词本，不计学习评分
         </p>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Sparkles, BookOpen, Loader2, Volume2, ChevronDown, ChevronUp, Shuffle, Check, X, Search, PlusCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Sparkles, BookOpen, Loader2, Volume2, ChevronDown, ChevronUp, Shuffle, Check, X, Search, PlusCircle, CheckCircle2, Pause, Square, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import SegmentControl from '../components/SegmentControl'
 import { api } from '../api'
-import { speak } from '../tts'
+import { speakWord as pronounceWord, getAccent } from '../tts'
+import { ReadingPlayer } from '../readingPlayer'
 
 const EXAMS = [
   { id: '高中英语', label: '高中英语' },
@@ -100,6 +101,17 @@ export default function Reading() {
   const [addedWords, setAddedWords] = useState(() => new Set())
   const allDone = article?.questions?.length > 0 && article.questions.every(q => userAnswers[q.question] != null)
 
+  // ── Long-form reading player (state machine: IDLE/LOADING/PLAYING/PAUSED/…) ──
+  const playerRef = useRef(null)
+  const [reading, setReading] = useState({ state: 'IDLE', index: 0, total: 0 })
+  useEffect(() => {
+    const player = new ReadingPlayer()
+    player.setVoice(getAccent())
+    playerRef.current = player
+    const unsub = player.subscribe((s) => setReading(s))
+    return () => { unsub(); player.stop() }
+  }, [])
+
   const addWordToStudy = async (v) => {
     if (addedWords.has(v.word)) return
     try {
@@ -130,15 +142,25 @@ export default function Reading() {
     finally { setLoading(false) }
   }
 
-  const speakArticle = () => {
-    if (!article?.content) return
-    speak(article.content)
-  }
-
   const speakWord = (word) => {
     if (!word) return
-    speak(word)
+    pronounceWord(word)
   }
+
+  const startReading = () => {
+    if (!article?.content || !playerRef.current) return
+    playerRef.current.play(article.content)
+  }
+
+  const togglePause = () => {
+    const p = playerRef.current
+    if (!p) return
+    if (p.state === 'PLAYING' || p.state === 'LOADING') p.pause()
+    else if (p.state === 'PAUSED') p.resume()
+    else startReading()
+  }
+
+  const stopReading = () => playerRef.current?.stop()
 
   const selectAnswer = (qText, letter) => {
     if (showReview) return
@@ -264,10 +286,26 @@ export default function Reading() {
             <input type="range" min={14} max={22} value={fontSize} onChange={e => setFontSize(parseInt(e.target.value))}
               style={{ flex: 1, accentColor: 'var(--accent)' }} />
             <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{fontSize}px</span>
-            <button onClick={speakArticle}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.6875rem', fontWeight: 600 }}>
-              <Volume2 size={14} />朗读
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              {reading.state === 'PLAYING' || reading.state === 'LOADING' ? (
+                <button onClick={togglePause} title="暂停"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.6875rem', fontWeight: 600 }}>
+                  <Pause size={14} />暂停
+                </button>
+              ) : (
+                <button onClick={togglePause} title={reading.state === 'PAUSED' ? '继续' : '朗读'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.6875rem', fontWeight: 600 }}>
+                  {reading.state === 'PAUSED' ? <Play size={14} /> : <Volume2 size={14} />}
+                  {reading.state === 'PAUSED' ? '继续' : '朗读'}
+                </button>
+              )}
+              {(reading.state === 'PLAYING' || reading.state === 'PAUSED' || reading.state === 'LOADING') && (
+                <button onClick={stopReading} title="停止"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.6875rem', fontWeight: 600 }}>
+                  <Square size={13} />停止
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Content */}

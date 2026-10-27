@@ -6,7 +6,7 @@ import {
   Download, FileUp, Plus, BookMarked, Clock, BarChart3, RotateCcw, Sparkles,
 } from 'lucide-react'
 import { api } from '../api'
-import { speak } from '../tts'
+import { speakWord as pronounceWord } from '../tts'
 import Modal, { AlertModal } from '../components/Modal'
 
 const PER_PAGE = 50
@@ -205,7 +205,7 @@ export default function Dictionary() {
 
   const speakWord = (word) => {
     if (!word) return
-    speak(String(word).trim())
+    pronounceWord(word)
   }
 
   // ── Render helper ──

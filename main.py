@@ -31,7 +31,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from logging_config import startup_log  # noqa: E402
 
 # ─── Logging ────────────────────────────────────────────────────
-DATA_DIR = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster"
+DATA_DIR = Path(os.getenv("WORDMASTER_DATA_DIR") or (Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 log_handlers = [
@@ -52,79 +52,123 @@ _native_icon_handles = []
 # Backend startup budget — generous enough for a slow first launch (fresh DB
 # creation, 40k+ word parsing, antivirus scanning the extracted EXE) without
 # masking a real crash: the poll exits early the moment the thread errors out.
-BACKEND_START_TIMEOUT = 18.0   # seconds
+BACKEND_START_TIMEOUT = 45.0   # seconds
 BACKEND_POLL_INTERVAL = 0.15   # seconds
 
 
-def find_free_port(start=8000, end=8020) -> int:
-    """Find a free port in the given range."""
+def reserve_backend_socket(start=8000, end=8020):
+    """Reserve ownership before starting; never connect a new UI to an old server."""
+    import urllib.request
+    from frontend_assets import frontend_log
     for port in range(start, end + 1):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("127.0.0.1", port))
-                return port
+            if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            sock.bind(('127.0.0.1', port))
+            sock.listen(128)
+            return sock
         except OSError:
-            continue
-    raise RuntimeError(f"No free port in range {start}-{end}")
+            sock.close()
+            owner = 'unknown'
+            try:
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=.3) as response:
+                    data = json.load(response)
+                    if data.get('application') == 'WordMaster':
+                        owner = 'WordMaster'
+                    elif data.get('status') == 'ok':
+                        owner = 'unverified_legacy_service'
+            except Exception:
+                pass
+            frontend_log('occupied_port_skipped', port=port, owner=owner)
+    raise RuntimeError(f'No free port in range {start}-{end}')
 
 
-def start_backend(port: int) -> threading.Thread:
-    """Start the FastAPI backend in a daemon thread and wait until ready.
+def find_free_port(start=8000, end=8020):
+    # Compatibility for scripts; production keeps the reserved socket open.
+    sock = reserve_backend_socket(start, end)
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
 
-    Readiness is signalled by ``GET /health`` returning 200 — only possible
-    once ``app.py`` has finished ``init_db()`` (migrations + built-in word
-    books) and uvicorn is actually serving. Real errors raised inside the
-    backend thread are captured and reported as their actual cause instead of
-    a generic timeout, distinguishing:
-      A. backend crashed / failed to start  → report the real exception
-      B. port already in use                 → clear "port in use" message
-      C. backend merely slow                 → keep polling up to the budget
-    """
+
+class BackendHandle:
+    def __init__(self, sock):
+        self.socket = sock
+        self.port = sock.getsockname()[1]
+        self.server = None
+        self.thread = None
+        self.stopping = False
+        self.build_id = None
+        self.instance_id = None
+
+    def stop(self):
+        from frontend_assets import frontend_log
+        self.stopping = True
+        if self.server:
+            self.server.should_exit = True
+        if self.thread:
+            self.thread.join(timeout=8)
+            if self.thread.is_alive() and self.server:
+                self.server.force_exit = True
+                self.thread.join(timeout=2)
+        self.socket.close()
+        frontend_log('http_server_stopped', port=self.port,
+                     thread_alive=bool(self.thread and self.thread.is_alive()))
+
+
+def start_backend(port=None):
     import uvicorn
-
-    thread_error = {}
+    import urllib.request
+    import uuid
+    from frontend_assets import frontend_log
+    sock = reserve_backend_socket(port, port) if port is not None else reserve_backend_socket()
+    handle = BackendHandle(sock)
+    handle.instance_id = uuid.uuid4().hex
+    errors = {}
 
     def run_server():
         try:
-            from app import app  # runs init_db() here (migrations + word books)
-            uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
-        except BaseException as exc:  # noqa: BLE001 — capture the real cause
-            thread_error["exc"] = exc
-            startup_log(f"backend thread exited: {type(exc).__name__}: {exc}")
+            from app import app
+            app.state.instance_id = handle.instance_id
+            handle.bundle = app.state.frontend
+            handle.build_id = handle.bundle.build_id
+            handle.server = uvicorn.Server(uvicorn.Config(app, log_level='warning', timeout_graceful_shutdown=3))
+            if not handle.stopping:
+                handle.server.run(sockets=[sock])
+        except BaseException as exc:
+            errors['exc'] = exc
 
-    startup_log(f"starting backend on 127.0.0.1:{port} (WordMaster v0.1.0)")
-    thread = threading.Thread(target=run_server, daemon=True, name="WordMaster-Backend")
-    thread.start()
-
-    import urllib.request
-    import urllib.error
-
-    health_url = f"http://127.0.0.1:{port}/health"
+    handle.thread = threading.Thread(target=run_server, daemon=True, name='WordMaster-Backend')
+    handle.thread.start()
+    base = f'http://127.0.0.1:{handle.port}'
+    frontend_log('http_server_starting', port=handle.port)
     deadline = time.monotonic() + BACKEND_START_TIMEOUT
-
-    while time.monotonic() < deadline:
-        if thread_error:
-            raise _backend_failure(port, thread_error["exc"])
-
-        try:
-            resp = urllib.request.urlopen(health_url, timeout=0.5)
-            if resp.status == 200:
-                startup_log("backend ready")
-                logger.info(f"Backend ready on port {port}")
-                return thread
-        except (urllib.error.URLError, OSError):
-            # Connection refused / not ready yet — keep polling.
-            pass
-
-        time.sleep(BACKEND_POLL_INTERVAL)
-
-    # Budget exhausted — report the specific reason instead of a bare timeout.
-    if thread_error:
-        raise _backend_failure(port, thread_error["exc"])
-    raise RuntimeError(
-        f"Backend did not become ready within {BACKEND_START_TIMEOUT:.0f}s "
-        f"(last checked {health_url}). See %APPDATA%\\WordMaster\\logs\\startup.log"
-    )
+    try:
+        while time.monotonic() < deadline:
+            if errors:
+                raise _backend_failure(handle.port, errors['exc'])
+            try:
+                with urllib.request.urlopen(base + '/health', timeout=.5) as response:
+                    data = json.load(response)
+                if (data.get('instance_id') == handle.instance_id and
+                        data.get('frontend_build') == handle.build_id and data.get('status') == 'ok'):
+                    # Verify the actual HTTP delivery, not just filesystem existence.
+                    for name, expected in handle.bundle.files.items():
+                        if name.endswith(('.html', '.js', '.css')):
+                            with urllib.request.urlopen(base + '/' + name, timeout=3) as response:
+                                if response.status != 200 or response.read() != expected:
+                                    raise RuntimeError(f'HTTP frontend verification failed: {name}')
+                    frontend_log('http_server_ready', port=handle.port, build=handle.build_id)
+                    return handle
+            except (OSError, ValueError):
+                pass
+            time.sleep(BACKEND_POLL_INTERVAL)
+        raise RuntimeError(f'Backend readiness timed out after {BACKEND_START_TIMEOUT}s')
+    except BaseException as exc:
+        frontend_log('startup_failed', error=str(exc))
+        handle.stop()
+        raise
 
 
 def _backend_failure(port: int, exc: BaseException) -> RuntimeError:
@@ -327,61 +371,28 @@ class Api:
 def main():
     import webview
 
-    # ── 1. Start backend ──
-    port = find_free_port(8000, 8020)
-    url = f"http://127.0.0.1:{port}"
-
-    logger.info("=" * 50)
-    logger.info(f"  WordMaster v0.1.0 Beta — port {port}")
-    logger.info("=" * 50)
-
-    logger.info("Starting backend server...")
-    server_thread = start_backend(port)
-
-    # ── 2. Create icon ──
-    icon_path = create_icon()
-
-    # ── 3. Create JS API bridge ──
-    api = Api(port)
-
-    # ── 4. Create native window ──
-    logger.info("Creating desktop window (1200x800)...")
-
-    window = webview.create_window(
-        title="WordMaster",
-        url=url,
-        width=1200,
-        height=800,
-        min_size=(800, 600),
-        resizable=True,
-        fullscreen=False,
-        easy_drag=True,
-        background_color="#0a0a0a",
-        text_select=False,
-        js_api=api,  # ← Enables window.pywebview.api in JavaScript
-    )
-    window.events.shown += lambda *_args: set_windows_window_icon(icon_path)
-
-    # ── 5. Start WebView event loop ──
-    logger.info("Launching WordMaster window...")
-
+    from frontend_assets import frontend_log
+    backend = start_backend()
+    url = f'http://127.0.0.1:{backend.port}/?wm-build={backend.build_id}&wm-instance={backend.instance_id}'
     try:
-        import inspect
-
-        start_options = dict(
-            debug=False,
-            http_server=False,
-            private_mode=False,
+        icon_path = create_icon()
+        frontend_log('page_load', url=url, build=backend.build_id, port=backend.port)
+        window = webview.create_window(
+            title='WordMaster', url=url, width=1200, height=800,
+            min_size=(800, 600), resizable=True, fullscreen=False,
+            easy_drag=True, background_color='#0a0a0a', text_select=False,
+            js_api=Api(backend.port),
         )
-        if icon_path and "icon" in inspect.signature(webview.start).parameters:
-            start_options["icon"] = icon_path
-        webview.start(**start_options)
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received")
-    except Exception as e:
-        logger.error(f"WebView error: {e}")
+        window.events.shown += lambda *_args: set_windows_window_icon(icon_path)
+        import inspect
+        options = dict(debug=False, http_server=False, private_mode=False,
+                       storage_path=str(DATA_DIR / 'webview' / str(backend.port)))
+        if icon_path and 'icon' in inspect.signature(webview.start).parameters:
+            options['icon'] = icon_path
+        webview.start(**options)
     finally:
-        logger.info("WordMaster closed.")
+        backend.stop()
+        logger.info('WordMaster closed.')
 
 
 if __name__ == "__main__":

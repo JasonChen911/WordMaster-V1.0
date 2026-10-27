@@ -264,10 +264,10 @@ export const api = {
   // Mistake book (错词本)
   getMistakes: (source = 'all') => request(`/mistakes?source=${source}`),
   getMistakeStats: () => request('/mistakes/stats'),
-  recordMistake: (word, source, mistakeType = '') =>
+  recordMistake: (wordId, source, mistakeType = '', sessionId = '') =>
     request('/mistakes', {
       method: 'POST',
-      body: JSON.stringify({ word, source, mistake_type: mistakeType }),
+      body: JSON.stringify({ word_id: wordId, source, mistake_type: mistakeType, session_id: sessionId }),
     }),
   addMistakeToReview: (wordId) => request(`/mistakes/${wordId}/review`, { method: 'POST' }),
   removeMistake: (wordId) => request(`/mistakes/${wordId}`, { method: 'DELETE' }),

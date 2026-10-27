@@ -6,8 +6,49 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Word, Book, DictionaryEntry
 from schemas import WordOut
+from morphology import variants_for
 
 router = APIRouter()
+
+
+def _study_word_matches(db: Session, q: str, limit: int = 20) -> list[Word]:
+    """Resolve a query to study words: exact → lemma → substring → chinese.
+
+    An inflected form (e.g. ``students``) falls back to its lemma (``student``)
+    so the canonical entry — with its Chinese meaning — is returned instead of
+    an empty result.
+    """
+    q_norm = q.strip().lower()
+    seen: dict[int, Word] = {}
+
+    # 1) exact + lemma matches (best first)
+    for v in variants_for(q_norm):
+        for w in db.query(Word).filter(Word.english == v).all():
+            seen.setdefault(w.id, w)
+
+    # 2) english substring fallback
+    if len(seen) < limit:
+        for w in (
+            db.query(Word)
+            .filter(Word.english.ilike(f"%{q_norm}%"))
+            .order_by(Word.english.asc())
+            .limit(limit)
+            .all()
+        ):
+            seen.setdefault(w.id, w)
+
+    # 3) chinese substring fallback
+    if len(seen) < limit:
+        for w in (
+            db.query(Word)
+            .filter(Word.chinese.ilike(f"%{q_norm}%"))
+            .order_by(Word.english.asc())
+            .limit(limit)
+            .all()
+        ):
+            seen.setdefault(w.id, w)
+
+    return list(seen.values())[:limit]
 
 
 @router.get("/api/search")
@@ -19,15 +60,7 @@ def search_words(
     if not q.strip():
         return {"words": [], "total": 0}
 
-    words = (
-        db.query(Word)
-        .filter(
-            (Word.english.ilike(f"%{q}%")) | (Word.chinese.ilike(f"%{q}%"))
-        )
-        .order_by(Word.english.asc())
-        .limit(20)
-        .all()
-    )
+    words = _study_word_matches(db, q)
 
     return {
         "words": [
@@ -80,26 +113,30 @@ def search_all(
 
     active_book = db.query(Book).filter(Book.id == book_id).first()
 
-    # Search study words
-    study_words = (
-        db.query(Word)
-        .filter(
-            (Word.english.ilike(f"%{q}%")) | (Word.chinese.ilike(f"%{q}%"))
-        )
-        .order_by(Word.english.asc())
-        .limit(20)
-        .all()
-    )
+    # Search study words (exact → lemma → substring → chinese)
+    study_words = _study_word_matches(db, q, limit=20)
 
-    # Search dictionary (scoped to active book)
+    # Search dictionary (scoped to active book); resolve inflected forms to lemma.
+    q_norm = q.strip().lower()
+    dict_seen: dict[int, DictionaryEntry] = {}
+    for v in variants_for(q_norm):
+        dq = db.query(DictionaryEntry).filter(DictionaryEntry.word == v)
+        if book_id > 0:
+            dq = dq.filter(DictionaryEntry.book_id == book_id)
+        for d in dq.all():
+            dict_seen.setdefault(d.id, d)
+
     dict_query = db.query(DictionaryEntry).filter(
-        (DictionaryEntry.word.ilike(f"%{q}%"))
-        | (DictionaryEntry.definition_cn.ilike(f"%{q}%"))
-        | (DictionaryEntry.definition_en.ilike(f"%{q}%"))
+        (DictionaryEntry.word.ilike(f"%{q_norm}%"))
+        | (DictionaryEntry.definition_cn.ilike(f"%{q_norm}%"))
+        | (DictionaryEntry.definition_en.ilike(f"%{q_norm}%"))
     )
     if book_id > 0:
         dict_query = dict_query.filter(DictionaryEntry.book_id == book_id)
-    dict_results = dict_query.order_by(DictionaryEntry.word.asc()).limit(30).all()
+    for d in dict_query.order_by(DictionaryEntry.word.asc()).limit(30).all():
+        dict_seen.setdefault(d.id, d)
+
+    dict_results = list(dict_seen.values())[:30]
 
     return {
         "study_words": [

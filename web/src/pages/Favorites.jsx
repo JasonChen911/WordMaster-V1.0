@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Star, Volume2, CheckCircle2, BookOpen, Sparkles } from 'lucide-react'
 import { api } from '../api'
-import { speak } from '../tts'
+import { speakWord as pronounceWord } from '../tts'
 import AIPanel from '../components/AIPanel'
 
 export default function Favorites() {
@@ -28,7 +28,7 @@ export default function Favorites() {
 
   const speakWord = (word) => {
     if (!word) return
-    speak(word)
+    pronounceWord(word)
   }
 
   return (
