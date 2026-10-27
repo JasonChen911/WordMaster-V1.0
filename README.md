@@ -218,6 +218,16 @@ WordMaster/
 
 **专有软件，保留所有权利。**
 
+Copyright © 2026 JasonChen. All rights reserved.
+
+WordMaster is a proprietary English vocabulary learning application independently developed by JasonChen.
+
+This repository is intended for project presentation, documentation, release distribution, and issue tracking.
+
+Unless explicitly authorized, the publication of this repository does not grant permission to reproduce, modify, redistribute, or commercially exploit the proprietary software or its source code.
+
+WordMaster has obtained software copyright registration in China.
+
 本项目为内部 Beta 测试版本。未经作者许可，禁止复制、修改、再分发或商业使用。
 
 详见 `license_agreement.txt` 与安装程序中的《WordMaster 软件使用协议》。
