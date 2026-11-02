@@ -14,6 +14,7 @@ from database import get_db
 from models import Word, Book, SourceDocument, SourceWord
 from core import _get_active_book_id, _link_book_words
 from learning_events import log_event
+from morphology import variants_for
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,16 @@ async def reading_add_word(request: Request, db: Session = Depends(get_db)):
     source_sentence = str(body.get("source_sentence") or "").strip()
 
     # Find or create the study word (never overwrite existing progress fields).
+    # An inflected form (e.g. "students") resolves to its existing lemma so the
+    # formal library is not polluted with duplicate word-form rows.
     word = db.query(Word).filter(Word.english == word_text).first()
+    if not word:
+        for v in variants_for(word_text):
+            if v == word_text:
+                continue
+            word = db.query(Word).filter(Word.english == v).first()
+            if word:
+                break
     if not word:
         word = Word(english=word_text, phonetic="", chinese=meaning or "", example_en=example or "", example_cn="")
         db.add(word)

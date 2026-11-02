@@ -52,8 +52,13 @@ export default function Navbar() {
               className="w-8 h-8 rounded-lg object-contain transition-all duration-200 group-hover:scale-105"
               style={{ backgroundColor: 'var(--text-primary)' }}
             />
-            <span className="font-bold text-base tracking-tight hidden sm:block"
-              style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>WordMaster</span>
+            <span className="text-base hidden sm:block"
+              style={{
+                color: 'var(--text-primary)',
+                fontFamily: 'Georgia, "Times New Roman", serif',
+                fontWeight: 600,
+                letterSpacing: '-0.025em',
+              }}>WordMaster</span>
           </NavLink>
 
           <div className="hidden sm:flex items-center gap-0.5">

@@ -38,9 +38,11 @@ def check(name, cond, detail=""):
 
 
 def _games_chunk_name():
-    assets = ROOT / "web" / "dist" / "assets"
-    for p in sorted(assets.glob("Games-*.js")):
-        return p.name
+    from frontend_assets import FrontendBundle
+    bundle = FrontendBundle(ROOT / "web/dist")
+    for name in bundle.files:
+        if name.startswith("assets/Games-") and name.endswith(".js"):
+            return Path(name).name
     return None
 
 
@@ -85,12 +87,13 @@ b_code = (
     "port = main.find_free_port(8100, 8120)\n"
     "thread = main.start_backend(port)\n"
     "print('READY', port)\n"
+    "thread.stop()\n"
 )
 b_env = os.environ.copy()
 b_env["ROOT"] = str(ROOT)
 b_env["SERVER"] = str(SERVER)
 b_env["WORDMASTER_DATA_DIR"] = tempfile.mkdtemp(prefix="wm_b_")
-b = subprocess.run([sys.executable, "-c", b_code], env=b_env, capture_output=True, text=True, timeout=180)
+b = subprocess.run([sys.executable, "-c", b_code], env=b_env, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
 check("start_backend reports READY (backend became ready)", "READY" in b.stdout, b.stdout[-400:] + b.stderr[-400:])
 
 # ── C. Backend early-exit surfaces real error ──
@@ -100,15 +103,15 @@ import main
 # Fake a fast `app` so we don't run the real init_db in this in-process test.
 if "app" not in sys.modules:
     sys.modules["app"] = types.ModuleType("app")
-sys.modules["app"].app = object()
+# Use real app metadata; only server execution is replaced.
 
 import uvicorn
 
 def _boom(*a, **k):
     raise RuntimeError("synthetic bind failure")
 
-_orig_run = uvicorn.run
-uvicorn.run = _boom
+_orig_run = uvicorn.Server.run
+uvicorn.Server.run = _boom
 try:
     try:
         main.start_backend(main.find_free_port(8121, 8129))
@@ -117,14 +120,14 @@ try:
         ok = "exited during startup" in str(e) and "synthetic bind failure" in str(e)
         check("raised with real cause (not generic timeout)", ok, str(e))
 finally:
-    uvicorn.run = _orig_run
+    uvicorn.Server.run = _orig_run
 
 # ── F. Port-in-use reported clearly ──
 print("\n=== F. 端口占用处理 ===")
 def _addr_in_use(*a, **k):
     raise OSError("[Errno 10048] address already in use")
 
-uvicorn.run = _addr_in_use
+uvicorn.Server.run = _addr_in_use
 try:
     try:
         main.start_backend(main.find_free_port(8121, 8129))
@@ -132,7 +135,7 @@ try:
     except RuntimeError as e:
         check("message mentions port in use", "in use" in str(e) or "占用" in str(e), str(e))
 finally:
-    uvicorn.run = _orig_run
+    uvicorn.Server.run = _orig_run
     del sys.modules["app"]
 
 # ── D. Fresh database first launch (isolated) ──
@@ -157,7 +160,7 @@ d_code = (
 d_env = os.environ.copy()
 d_env["SERVER"] = str(SERVER)
 d_env["WORDMASTER_DATA_DIR"] = tmpd
-d = subprocess.run([sys.executable, "-c", d_code], env=d_env, capture_output=True, text=True, timeout=180)
+d = subprocess.run([sys.executable, "-c", d_code], env=d_env, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
 check("fresh DB: all tables created", "MISSING []" in d.stdout, d.stdout[-400:] + d.stderr[-400:])
 check("fresh DB: built-in words loaded", "WORDS" in d.stdout and "WORDS 0" not in d.stdout, d.stdout[-400:])
 check("fresh DB: books created", "BOOKS" in d.stdout and "BOOKS 0" not in d.stdout, d.stdout[-400:])
@@ -179,7 +182,8 @@ e_code = (
 )
 e_env = os.environ.copy()
 e_env["SERVER"] = str(SERVER)
-e = subprocess.run([sys.executable, "-c", e_code], env=e_env, capture_output=True, text=True, timeout=180)
+e_env["WORDMASTER_DATA_DIR"] = tmpd
+e = subprocess.run([sys.executable, "-c", e_code], env=e_env, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=180)
 check("existing DB: migration idempotent (no error)", e.returncode == 0, e.stderr[-400:])
 check("existing DB: data preserved", "WORDS" in e.stdout and "ACTIVE True" in e.stdout, e.stdout[-400:])
 

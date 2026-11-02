@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, BookOpen, RefreshCw, Trash2, Play, X } from 'lucide-react'
+import { ArrowLeft, BookOpen, RefreshCw, Trash2, Play } from 'lucide-react'
 import { api } from '../api'
 import Modal from '../components/Modal'
 
@@ -18,11 +18,12 @@ function groupByWord(mistakes) {
       entry = {
         word_id: m.word_id, english: m.english, chinese: m.chinese, phonetic: m.phonetic,
         last_occurred_at: m.last_occurred_at,
+        example_en: m.example_en, example_cn: m.example_cn, study_status: m.study_status,
         daily: 0, game: 0, total: 0,
       }
       map.set(m.word_id, entry)
     }
-    entry[m.source] += m.count
+    entry[m.source] = (entry[m.source] || 0) + m.count
     entry.total += m.count
     if (m.last_occurred_at > entry.last_occurred_at) entry.last_occurred_at = m.last_occurred_at
   }
@@ -44,16 +45,19 @@ export default function MistakeBook() {
   const [raw, setRaw] = useState([])
   const [stats, setStats] = useState({ total: 0, daily: 0, game: 0 })
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState(null) // grouped entry for detail
 
   const load = () => {
     setLoading(true)
+    setError('')
     Promise.all([api.getMistakes('all'), api.getMistakeStats()])
       .then(([m, s]) => {
         setRaw(m.mistakes || [])
         setStats(s)
       })
-      .catch(console.error)
+      .catch(e => setError(e.message || '错词本加载失败，请重试。'))
       .finally(() => setLoading(false))
   }
 
@@ -67,20 +71,35 @@ export default function MistakeBook() {
   }, [grouped, filter])
 
   const handleRemove = async () => {
-    if (!selected) return
+    if (!selected || busy) return
+    setBusy(true); setError('')
     try {
       await api.removeMistake(selected.word_id)
       setSelected(null)
       load()
-    } catch (e) { console.error(e) }
+    } catch (e) { setError(e.message || '操作失败，请重试。') }
+    finally { setBusy(false) }
   }
 
   const handleAddReview = async () => {
-    if (!selected) return
+    if (!selected || busy) return
+    setBusy(true); setError('')
     try {
       await api.addMistakeToReview(selected.word_id)
-      setSelected((prev) => prev ? { ...prev, addedReview: true } : prev)
-    } catch (e) { console.error(e) }
+      setSelected((prev) => prev ? { ...prev, addedReview: true, study_status: 'learning' } : prev)
+    } catch (e) { setError(e.message || '操作失败，请重试。') }
+    finally { setBusy(false) }
+  }
+
+  const handleContinue = async () => {
+    if (!selected || busy) return
+    setBusy(true); setError('')
+    try {
+      const review = await api.addMistakeToReview(selected.word_id)
+      if (review.book_id) await api.activateBook(review.book_id)
+      navigate(`/study?word_id=${selected.word_id}`)
+    } catch (e) { setError(e.message || '无法进入学习，请重试。') }
+    finally { setBusy(false) }
   }
 
   const tabs = [
@@ -103,7 +122,7 @@ export default function MistakeBook() {
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setFilter(t.key)}
+          <button key={t.key} onClick={() => setFilter(t.key)} aria-pressed={filter === t.key}
             style={{
               display: 'flex', alignItems: 'center', gap: '0.4rem',
               padding: '0.45rem 0.9rem', borderRadius: '100px', border: 'none', cursor: 'pointer',
@@ -123,12 +142,14 @@ export default function MistakeBook() {
         ))}
       </div>
 
+      {error && !selected && <div role="alert" className="text-sm mb-4">{error} <button onClick={load} className="ios-button ios-button-secondary">重试</button></div>}
+
       {/* List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : error ? null : filtered.length === 0 ? (
         <div className="text-center py-16">
           <BookOpen size={36} style={{ color: 'var(--text-tertiary)', margin: '0 auto 1rem' }} />
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
@@ -138,7 +159,7 @@ export default function MistakeBook() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {filtered.map((g) => (
-            <button key={g.word_id} onClick={() => setSelected(g)}
+            <button key={g.word_id} onClick={() => { setError(''); setSelected(g) }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%',
                 padding: '0.7rem 0.9rem', borderRadius: 'var(--radius-md)', textAlign: 'left',
@@ -158,13 +179,13 @@ export default function MistakeBook() {
                   {g.daily > 0 && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                       style={{ backgroundColor: SOURCE_COLORS.daily.bg, color: SOURCE_COLORS.daily.color }}>
-                      日常 {g.daily}次
+                      日常错误 {g.daily}次
                     </span>
                   )}
                   {g.game > 0 && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                       style={{ backgroundColor: SOURCE_COLORS.game.bg, color: SOURCE_COLORS.game.color }}>
-                      游戏 {g.game}次
+                      游戏错误 {g.game}次
                     </span>
                   )}
                 </div>
@@ -187,9 +208,12 @@ export default function MistakeBook() {
       >
         {selected && (
           <div className="space-y-2.5 py-1">
+            {error && <p role="alert" style={{ color: 'var(--danger)' }}>{error}</p>}
             {selected.phonetic && <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>{selected.phonetic}</p>}
             <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{selected.chinese}</p>
 
+            {selected.example_en && <div className="text-xs"><p>{selected.example_en}</p><p style={{ color: 'var(--text-secondary)' }}>{selected.example_cn}</p></div>}
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>学习状态：{{ new: '未学习', learning: '学习中', mastered: '已掌握' }[selected.study_status] || selected.study_status}</p>
             <div className="flex flex-wrap gap-1.5">
               {selected.daily > 0 && (
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
@@ -211,13 +235,14 @@ export default function MistakeBook() {
               <span style={{ color: 'var(--text-tertiary)' }}> · 最近 {formatTime(selected.last_occurred_at)}</span>
             </div>
 
+            <button onClick={handleContinue} disabled={busy} className="ios-button ios-button-primary w-full">继续学习这个词</button>
             <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.25rem' }}>
-              <button onClick={handleAddReview}
+              <button onClick={handleAddReview} disabled={busy || selected.addedReview}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold"
                 style={{ backgroundColor: selected.addedReview ? 'var(--success-subtle)' : 'var(--accent)', color: selected.addedReview ? 'var(--success)' : '#fff', border: 'none', cursor: 'pointer' }}>
                 {selected.addedReview ? '✓ 已加入' : <><Play size={13} /> 加入今日复习</>}
               </button>
-              <button onClick={handleRemove}
+              <button onClick={handleRemove} disabled={busy}
                 className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
                 style={{ backgroundColor: 'var(--danger-subtle)', color: 'var(--danger)', border: 'none', cursor: 'pointer' }}>
                 <Trash2 size={13} /> 移除

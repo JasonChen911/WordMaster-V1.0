@@ -11,13 +11,55 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Book, DictionaryEntry
+from models import Book, DictionaryEntry, Word
 from core import _link_book_words
 from ai.services import analyze_material, extract_candidates_local
+from morphology import variants_for
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _resolve_meaning(db: Session, word: str) -> str:
+    """Back-fill a missing Chinese meaning from the existing library.
+
+    The local (non-AI) fallback produces candidates with an empty ``meaning_zh``.
+    Before those are written into the formal library we try to recover a meaning
+    from the canonical word (exact → lemma) or its dictionary entry, so a
+    confirmed import never creates a "material" word with no Chinese.
+    """
+    for v in variants_for(word):
+        w = db.query(Word).filter(Word.english == v, Word.chinese != "").first()
+        if w and w.chinese:
+            return w.chinese
+    for v in variants_for(word):
+        d = (
+            db.query(DictionaryEntry)
+            .filter(DictionaryEntry.word == v, DictionaryEntry.definition_cn != "")
+            .first()
+        )
+        if d and d.definition_cn:
+            return d.definition_cn
+    return ""
+
+
+def _canonical_word(db: Session, word: str) -> str:
+    """Return the canonical library word for a candidate, else the candidate.
+
+    An inflected candidate (``students``) resolves to its existing lemma
+    (``student``) so the formal library never gains a duplicate word-form row
+    alongside the canonical entry.
+    """
+    if db.query(Word).filter(Word.english == word).first():
+        return word
+    for v in variants_for(word):
+        if v == word:
+            continue
+        w = db.query(Word).filter(Word.english == v).first()
+        if w:
+            return w.english
+    return word
 
 
 @router.post("/api/material/analyze")
@@ -72,11 +114,20 @@ async def material_import(request: Request, db: Session = Depends(get_db)):
     for w in words:
         if not isinstance(w, dict):
             continue
-        word = str(w.get("word") or "").strip().lower()
-        if not word or word in seen:
+        raw = str(w.get("word") or "").strip().lower()
+        if not raw:
+            continue
+        # Normalize + dedup + lemma-resolve: an inflected candidate folds into
+        # its canonical library word, so no duplicate word-form rows are created.
+        word = _canonical_word(db, raw)
+        if word in seen:
             continue
         seen.add(word)
         meaning = str(w.get("meaning_zh") or w.get("meaning") or "").strip()
+        # Never write a confirmed word with no meaning: recover from the library
+        # (exact → lemma → dictionary) before falling back to an empty field.
+        if not meaning:
+            meaning = _resolve_meaning(db, word)
         example = str(w.get("example") or "").strip()
         entries.append((word, "", meaning, example, ""))
 

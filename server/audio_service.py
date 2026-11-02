@@ -10,7 +10,7 @@ Audio is cached as MP3 files in APPDATA/WordMaster/audio_cache/.
 """
 
 import os
-import io
+import re
 import logging
 import hashlib
 import asyncio
@@ -36,16 +36,34 @@ SPEED_RATES = {
 
 # Cache directory
 if os.name == 'nt':
-    CACHE_DIR = Path(os.getenv('APPDATA', Path.home() / 'AppData' / 'Roaming')) / 'WordMaster' / 'audio_cache'
+    CACHE_DIR = Path(os.getenv('WORDMASTER_DATA_DIR') or
+                     (Path(os.getenv('APPDATA', Path.home() / 'AppData' / 'Roaming')) / 'WordMaster')) / 'audio_cache'
 else:
     CACHE_DIR = Path.home() / '.cache' / 'wordmaster' / 'audio'
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_MAX_CACHE_BYTES = 100 * 1024 * 1024
+
+
+def prune_audio_cache(directory: Path = None, max_bytes: int = _MAX_CACHE_BYTES) -> None:
+    """Evict least recently used MP3 files until the cache fits its budget."""
+    directory = Path(directory or CACHE_DIR)
+    files = sorted(directory.glob("*.mp3"), key=lambda p: p.stat().st_atime)
+    total = sum(p.stat().st_size for p in files)
+    for file in files:
+        if total <= max_bytes:
+            break
+        size = file.stat().st_size
+        try:
+            file.unlink()
+            total -= size
+        except OSError:
+            logger.warning("Could not remove old audio cache file: %s", file.name)
 
 
 # Bumped cache namespace so any audio previously cached from a URL / "word+URL"
 # key is no longer read. Old files remain on disk but are simply orphaned.
-_CACHE_VERSION = "v3"
+_CACHE_VERSION = "v4"
 
 
 def _cache_path(word: str, voice_key: str, speed: float) -> Path:
@@ -55,20 +73,15 @@ def _cache_path(word: str, voice_key: str, speed: float) -> Path:
     return CACHE_DIR / name
 
 
-def _build_ssml(text: str, voice_key: str, speed: float) -> str:
-    """Build SSML string for Edge TTS."""
-    voice = VOICES.get(voice_key, VOICES["us"])
-    rate = SPEED_RATES.get(speed, "medium")
-    return (
-        f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
-        f'xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">'
-        f'<voice name="{voice["name"]}">'
-        f'<prosody rate="{rate}">'
-        f'{text}'
-        f'</prosody>'
-        f'</voice>'
-        f'</speak>'
-    )
+# A word/sentence pronunciation must be short; a whole article must go through
+# the chunked reading player, never through this single-audio endpoint.
+_MAX_TTS_TEXT = 500
+
+
+def valid_text(text):
+    return (isinstance(text, str) and bool(text.strip())
+            and len(text.strip()) <= _MAX_TTS_TEXT
+            and not re.search(r'https?://|www\.|\.(mp3|wav|ogg|m4a|spx|aac|flac)|[<>{}\[\]]', text, re.I))
 
 
 async def generate_audio(
@@ -86,7 +99,8 @@ async def generate_audio(
     Returns:
         MP3 audio bytes, or None on failure.
     """
-    if not text or not text.strip():
+    if not valid_text(text):
+        logger.debug("[TTS_INPUT] blocked=%r", text)
         return None
 
     text = text.strip()
@@ -94,6 +108,7 @@ async def generate_audio(
 
     # ── Return cached ──
     if cache_file.exists():
+        os.utime(cache_file, None)
         logger.debug(f"Audio cache hit: {text} ({voice_key}@{speed}x)")
         return cache_file.read_bytes()
 
@@ -101,8 +116,12 @@ async def generate_audio(
     try:
         import edge_tts
 
-        ssml = _build_ssml(text, voice_key, speed)
-        communicate = edge_tts.Communicate(ssml)
+        logger.debug("[TTS_INPUT] provider_text=%r", text)
+        # Communicate accepts plain text and builds/escapes its own SSML.
+        communicate = edge_tts.Communicate(
+            text, voice=VOICES.get(voice_key, VOICES["us"])["name"],
+            rate=f"{round((speed - 1) * 100):+d}%",
+        )
 
         async def _collect():
             chunks = []
@@ -119,8 +138,16 @@ async def generate_audio(
             return None
 
         audio_bytes = b"".join(chunks)
-        cache_file.write_bytes(audio_bytes)
-        logger.info(f"Audio cached: {text} ({voice_key}@{speed}x) → {cache_file.name} ({len(audio_bytes)} bytes)")
+        logger.debug("[TTS_PROVIDER_RESPONSE] audio/mpeg bytes=%d", len(audio_bytes))
+        cache_saved = False
+        try:
+            cache_file.write_bytes(audio_bytes)
+            prune_audio_cache()
+            cache_saved = True
+        except OSError as exc:
+            logger.warning("Audio generated but cache write failed: %s", type(exc).__name__)
+        logger.info("Audio generated: %s (%s@%sx), %d bytes, cached=%s",
+                    text, voice_key, speed, len(audio_bytes), cache_saved)
         return audio_bytes
 
     except asyncio.TimeoutError:
@@ -130,14 +157,18 @@ async def generate_audio(
         logger.error("edge-tts not installed. Run: pip install edge-tts")
         return None
     except Exception as e:
-        logger.error(f"Edge TTS generation failed for '{text}': {type(e).__name__}: {e}")
+        logger.error("Edge TTS generation failed for %r: %s (HTTP %s)",
+                     text, type(e).__name__, getattr(e, 'status', 'unknown'))
         return None
 
 
 def get_cached_audio(text: str, voice_key: str = "us", speed: float = 1.0) -> Optional[bytes]:
     """Get cached audio bytes synchronously. Returns None if not cached."""
-    cache_file = _cache_path(text, voice_key, speed)
+    if not valid_text(text):
+        return None
+    cache_file = _cache_path(text.strip(), voice_key, speed)
     if cache_file.exists():
+        os.utime(cache_file, None)
         return cache_file.read_bytes()
     return None
 

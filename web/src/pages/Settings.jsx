@@ -159,8 +159,8 @@ export default function Settings() {
         {/* Custom theme entry */}
         <Row
           icon={Palette}
-          label="自定义主题"
-          detail={themeName === 'custom' ? '已自定义' : '创建你自己的主题'}
+          label="自定义主题与背景"
+          detail={themeName === 'custom' ? '已自定义' : '选择颜色与背景图片'}
           onClick={() => setShowCustomizer(true)}
           right={themeName === 'custom' && (
             <span style={{

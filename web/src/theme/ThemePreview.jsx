@@ -6,7 +6,8 @@
  * the user actually applies the theme.
  */
 import { textColorOn } from './themeUtils'
-export default function ThemePreview({ theme, mode = 'light' }) {
+import { backgroundImageFor } from './backgrounds'
+export default function ThemePreview({ theme, mode = 'light', background = null }) {
   if (!theme) return null
   const v = theme[mode === 'dark' ? 'dark' : 'light'] || theme.light
   const onPrimary = textColorOn(v['--primary'])
@@ -15,6 +16,9 @@ export default function ThemePreview({ theme, mode = 'light' }) {
     <div style={{
       borderRadius: 'var(--radius-lg)',
       backgroundColor: v['--background'],
+      backgroundImage: backgroundImageFor(background, mode === 'dark'),
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
       border: '1px solid ' + v['--border'],
       padding: '1rem',
       overflow: 'hidden',

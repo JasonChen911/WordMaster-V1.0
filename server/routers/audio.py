@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response as FastAPIResponse, JSONResponse
 
 from audio_service import (
-    generate_audio, get_cached_audio, is_cached,
+    generate_audio, get_cached_audio, is_cached, valid_text,
     clear_audio_cache, cache_stats, list_voices,
 )
 
@@ -44,7 +44,7 @@ async def get_word_audio(
         return JSONResponse({"error": "Invalid word"}, status_code=400)
 
     # Defense in depth: never feed a URL / audio-file address to the TTS engine.
-    if re.search(r"^(https?://|www\.)|\.(mp3|wav|ogg|m4a|spx|aac)(\?|$)", word, re.IGNORECASE):
+    if not valid_text(word):
         return JSONResponse({"error": "Invalid word"}, status_code=400)
 
     supported = [0.5, 0.75, 1.0, 1.25]

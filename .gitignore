@@ -7,6 +7,7 @@ node_modules/
 
 # --- Build output ---
 dist/
+dist-*/
 build/
 *.egg-info/
 *.egg
@@ -31,6 +32,9 @@ user_data/
 
 # --- Installer output ---
 installer_output/
+installer/bundle/
+installer/dist-*/
+installer/test_uninstall/
 Output/
 
 # --- Environment & secrets ---

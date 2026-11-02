@@ -11,6 +11,7 @@ Builds a standalone Windows .exe that:
 """
 
 import sys
+import ssl
 from pathlib import Path
 
 _block_cipher = None
@@ -21,13 +22,25 @@ WEB_DIST = ROOT / 'web' / 'dist'
 RESOURCES = ROOT / 'resources'
 
 # ── Collect frontend dist files → web/ ──
+sys.path.insert(0, str(SERVER))
+from frontend_assets import FrontendBundle
+frontend_bundle = FrontendBundle(WEB_DIST)
+import tempfile, atexit
+(ROOT / 'build').mkdir(exist_ok=True)
+frontend_stage_owner = tempfile.TemporaryDirectory(prefix='frontend-', dir=ROOT / 'build')
+atexit.register(frontend_stage_owner.cleanup)
+frontend_stage = Path(frontend_stage_owner.name)
+for name, content in frontend_bundle.files.items():
+    target = frontend_stage / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content)
+manifest_name = f'build-{frontend_bundle.build_id}.json'
+(frontend_stage / manifest_name).write_bytes((WEB_DIST / manifest_name).read_bytes())
 frontend_datas = []
-if WEB_DIST.exists():
-    for f in WEB_DIST.rglob('*'):
-        if f.is_file():
-            frontend_datas.append(
-                (str(f), str(Path('web') / f.relative_to(WEB_DIST).parent))
-            )
+for name in [*frontend_bundle.files, f'build-{frontend_bundle.build_id}.json']:
+    f = frontend_stage / name
+    frontend_datas.append((str(f), str(Path('web') / f.relative_to(frontend_stage).parent)))
+print(f'Packaging verified frontend {frontend_bundle.build_id}')
 
 # ── Collect server Python files → server/ ──
 server_datas = []
@@ -61,6 +74,13 @@ for filename in ['version_info.txt', '.env.example']:
     path = ROOT / filename
     if path.exists():
         root_datas.append((str(path), '.'))
+
+# Some Python distributions patch ssl.py to load a companion CA policy file
+# beside itself. PyInstaller collects ssl.py but does not discover this data
+# dependency, leaving every HTTPS/WSS request broken in the frozen program.
+ssl_policy_file = Path(ssl.__file__).with_name('codex-rejected-cas.pem')
+if ssl_policy_file.is_file():
+    root_datas.append((str(ssl_policy_file), '.'))
 
 # ── Icon (from resources/) ──
 icon_path = RESOURCES / 'icon.ico'
@@ -138,6 +158,8 @@ a = Analysis(
         'mdx_reader',
         'core',
         'db_init',
+        'morphology',
+        'repair',
         # Router modules
         'routers',
         'routers.words',
@@ -205,3 +227,12 @@ exe = EXE(
     icon=str(icon_path) if icon_path else None,
     version=str(version_path) if version_path.exists() else None,
 )
+
+# Installer refuses an EXE that does not match this verified build.
+import hashlib, json
+built_exe = Path(DISTPATH) / 'WordMaster.exe'
+(Path(DISTPATH) / 'WordMaster.build.json').write_text(json.dumps({
+    'build_id': frontend_bundle.build_id,
+    'exe_sha256': hashlib.sha256(built_exe.read_bytes()).hexdigest(),
+}), encoding='utf-8')
+frontend_stage_owner.cleanup()

@@ -15,7 +15,7 @@ fsrs>=6.3.0
 pywebview>=5.0
 
 # Microsoft Edge Neural TTS — natural pronunciation
-edge-tts>=7.0
+edge-tts>=7.3.1,<8
 pyttsx3>=2.90
 
 # Secure credential storage (Windows Credential Manager)

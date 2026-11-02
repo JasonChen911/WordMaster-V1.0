@@ -5,7 +5,6 @@ the route modules so that importing a router never triggers database writes.
 """
 
 import logging
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +27,7 @@ from core import (
     _get_setting, _set_setting, _get_active_book_id, _book_id_str,
     _new_word, _fill_missing_word_fields, _link_book_words,
 )
+from backup_utils import create_sqlite_backup, needs_upgrade_backup
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +39,25 @@ _applied_versions: set = set()
 
 # Keep at most this many automatic pre-migration backups.
 _MAX_BACKUPS = 3
+_LATEST_SCHEMA_VERSION = "v15.0_mistake_records"
 
 
 def _backup_database():
     """Snapshot the existing database before migrations touch it.
 
-    Only runs when a real database exists and no backup was made today, so a
-    user's study data is never overwritten by a migration without a safety copy.
+    Only runs before an upgrade, using SQLite's WAL-aware online backup API.
     """
     try:
         db_path = Path(DATABASE_PATH)
         if not db_path.exists() or db_path.stat().st_size == 0:
             return
+        if not needs_upgrade_backup(db_path, _LATEST_SCHEMA_VERSION, _BUILTIN_BOOKS_VERSION):
+            return
         today = datetime.now().strftime("%Y%m%d")
         backup = db_path.with_name(f"{db_path.stem}.bak-{today}{db_path.suffix}")
         if backup.exists():
             return
-        shutil.copy2(db_path, backup)
+        create_sqlite_backup(db_path, backup)
         # Prune old backups beyond the cap.
         siblings = sorted(db_path.parent.glob(f"{db_path.stem}.bak-*{db_path.suffix}"))
         for stale in siblings[:-_MAX_BACKUPS]:
@@ -64,8 +66,9 @@ def _backup_database():
             except OSError:
                 pass
         logger.info("Pre-migration backup written: %s", backup.name)
-    except Exception as exc:  # noqa: BLE001 — backup must never block startup
-        logger.warning("Pre-migration backup skipped: %s", exc)
+    except Exception as exc:
+        logger.error("Pre-migration backup failed: %s", exc)
+        raise RuntimeError("Database upgrade stopped because its backup failed") from exc
 
 
 def init_db():
@@ -93,6 +96,18 @@ def init_db():
             if active_str:
                 _set_setting(db, "active_book", active_str)
                 db.commit()
+
+        # Idempotent data-hygiene pass: back-fill blank meanings and merge any
+        # case-insensitive duplicate words. Never deletes user study data.
+        try:
+            from repair import repair_data
+            report = repair_data(db)
+            db.commit()
+            if any(v for v in report.values()):
+                logger.info("Data repair applied: %s", report)
+        except Exception as exc:  # noqa: BLE001 — hygiene must never block startup
+            db.rollback()
+            logger.warning("Data repair skipped: %s", exc)
 
         _log_startup_debug(db)
     finally:

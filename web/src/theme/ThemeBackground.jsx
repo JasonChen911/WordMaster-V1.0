@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTheme } from './ThemeContext'
 import StarlightParticles from './StarlightParticles'
 import AuroraBackground from './AuroraBackground'
+import { backgroundImageFor, getBackground } from './backgrounds'
 
 /**
  * Theme-specific immersive backgrounds:
@@ -11,11 +12,12 @@ import AuroraBackground from './AuroraBackground'
  * - gradient → CSS gradient overlay
  */
 export default function ThemeBackground() {
-  const { themeName, themeDef, customTheme } = useTheme()
+  const { themeName, themeDef, customTheme, isDark } = useTheme()
 
   const bgType = themeDef.backgroundType
   const gradient = themeDef.backgroundGradient
   const particles = themeDef.particles
+  const selectedBackground = themeName === 'custom' ? getBackground(customTheme?.backgroundId) : null
 
   const gradientCSS = useMemo(() => {
     if (bgType !== 'gradient' || !gradient) return null
@@ -39,6 +41,13 @@ export default function ThemeBackground() {
 
   return (
     <>
+      {selectedBackground && (
+        <div aria-hidden="true" style={{
+          position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+          backgroundImage: backgroundImageFor(selectedBackground, isDark),
+          backgroundSize: 'cover', backgroundPosition: 'center',
+        }} />
+      )}
       {/* Gradient overlay for aurora/galaxy/mono themes */}
       {gradientCSS && (
         <div

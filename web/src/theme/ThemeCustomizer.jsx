@@ -8,6 +8,7 @@ import ColorPicker from './ColorPicker'
 import ColorPalette from './ColorPalette'
 import AdvancedColorInput from './AdvancedColorInput'
 import ThemePreview from './ThemePreview'
+import { BACKGROUNDS, getBackground } from './backgrounds'
 
 /**
  * ThemeCustomizer — visual theme customization.
@@ -27,6 +28,7 @@ export default function ThemeCustomizer({ onBack }) {
     return toHex(themeDef?.light?.['--primary']) || DEFAULT_CUSTOM_PRIMARY
   })
   const [draftMode, setDraftMode] = useState(mode === 'dark' ? 'dark' : 'light')
+  const [backgroundId, setBackgroundId] = useState(() => getBackground(customTheme?.backgroundId)?.id || null)
 
   const previewTheme = useMemo(() => buildThemeFromPrimary(primary), [primary])
 
@@ -38,10 +40,11 @@ export default function ThemeCustomizer({ onBack }) {
   const restoreDefault = () => {
     setPrimary(DEFAULT_CUSTOM_PRIMARY)
     setDraftMode('light')
+    setBackgroundId(null)
   }
 
   const applyTheme = () => {
-    setCustomTheme({ primary })
+    setCustomTheme({ primary, backgroundId })
     setMode(draftMode)
     onBack?.()
   }
@@ -55,7 +58,7 @@ export default function ThemeCustomizer({ onBack }) {
         </button>
         <div>
           <h1 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>自定义主题</h1>
-          <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>先看颜色，再选颜色</p>
+          <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>选择颜色与背景，预览后应用</p>
         </div>
       </div>
 
@@ -97,6 +100,37 @@ export default function ThemeCustomizer({ onBack }) {
         <ColorPalette value={primary} onChange={setPrimary} />
       </div>
 
+      {/* ── 内置背景图片 ── */}
+      <SectionLabel>背景图片</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.6rem', marginBottom: '1.25rem' }}>
+        {[{ id: null, name: '无背景', url: null }, ...BACKGROUNDS].map((background) => {
+          const selected = backgroundId === background.id
+          return (
+            <button key={background.id || 'none'} type="button"
+              onClick={() => setBackgroundId(background.id)}
+              aria-pressed={selected}
+              aria-label={`背景图片：${background.name}`}
+              style={{
+                padding: '0.4rem', textAlign: 'left', cursor: 'pointer',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--surface-secondary)',
+                border: selected ? '2px solid var(--accent)' : '1px solid var(--border)',
+              }}>
+              <div style={{
+                height: 72, borderRadius: 'var(--radius-sm)', marginBottom: '0.4rem',
+                backgroundColor: 'var(--surface-tertiary)',
+                backgroundImage: background.url ? `url("${background.url}")` : 'none',
+                backgroundSize: 'cover', backgroundPosition: 'center',
+              }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 0.2rem 0.1rem' }}>
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{background.name}</span>
+                {selected && <Check size={15} style={{ color: 'var(--accent)' }} />}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
       {/* ── 实时预览 ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
         <SectionLabel>实时预览</SectionLabel>
@@ -115,7 +149,7 @@ export default function ThemeCustomizer({ onBack }) {
         </div>
       </div>
       <div style={{ marginBottom: '1.25rem' }}>
-        <ThemePreview theme={previewTheme} mode={draftMode} />
+        <ThemePreview theme={previewTheme} mode={draftMode} background={getBackground(backgroundId)} />
       </div>
 
       {/* ── 高级设置 ── */}

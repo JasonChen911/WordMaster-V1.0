@@ -90,7 +90,7 @@ export function ThemeProvider({ children }) {
   // ── Actions ──
   const setMode = useCallback((m) => setState(s => ({ ...s, mode: m })), [])
   const toggleMode = useCallback(() => setState(s => ({ ...s, mode: s.mode === 'dark' ? 'light' : 'dark' })), [])
-  const setTheme = useCallback((name) => setState(s => ({ ...s, name, custom: name === 'custom' ? s.custom : null })), [])
+  const setTheme = useCallback((name) => setState(s => ({ ...s, name })), [])
   const setCustomTheme = useCallback((config) => setState(s => ({ ...s, name: 'custom', custom: config })), [])
 
   return (

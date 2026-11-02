@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
 import { Volume2 } from 'lucide-react'
-import { speak, getAccent } from '../tts'
+import { speakWord, getAccent, traceTts } from '../tts'
 
 /**
  * Unified pronunciation button — Neural TTS (edge-tts) with offline fallback.
@@ -15,6 +15,7 @@ export default function AudioControl({ word, size = 'md' }) {
 
   const handleClick = useCallback((e) => {
     e.stopPropagation()
+    traceTts('[TTS_CLICK]', word)
     if (!text) return
     // Debounce: ignore rapid spam clicks within 250ms (no overlapping audio).
     const now = Date.now()
@@ -22,7 +23,7 @@ export default function AudioControl({ word, size = 'md' }) {
     lastPlayRef.current = now
 
     setPlaying(true)
-    speak(text, { onEnd: () => setPlaying(false) })
+    speakWord(text, { onEnd: () => setPlaying(false) })
   }, [text])
 
   if (!text) return null

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models import Book, DictionaryEntry
 from core import _link_book_words
+from morphology import variants_for
 
 logger = logging.getLogger(__name__)
 
@@ -35,20 +36,47 @@ def search_dictionary(
         active = db.query(Book).filter(Book.is_active == True).first()
         book_id = active.id if active else 0
 
-    query = db.query(DictionaryEntry).filter(
-        DictionaryEntry.book_id == book_id,
-        DictionaryEntry.word.ilike(f"{q.strip()}%"),
-    )
+    q_norm = q.strip().lower()
+
+    # Resolve inflected forms to their lemma so "students" returns "student".
+    # Order: exact/lemma match first, then prefix, then Chinese definition.
+    seen: dict[int, DictionaryEntry] = {}
+    for v in variants_for(q_norm):
+        for r in (
+            db.query(DictionaryEntry)
+            .filter(DictionaryEntry.book_id == book_id, DictionaryEntry.word == v)
+            .all()
+        ):
+            seen.setdefault(r.id, r)
+
+    for r in (
+        db.query(DictionaryEntry)
+        .filter(
+            DictionaryEntry.book_id == book_id,
+            DictionaryEntry.word.ilike(f"{q_norm}%"),
+        )
+        .order_by(DictionaryEntry.word.asc())
+        .limit(limit)
+        .all()
+    ):
+        seen.setdefault(r.id, r)
 
     # For Chinese queries, search definition
-    has_chinese = any("一" <= c <= "鿿" for c in q)
+    has_chinese = any("一" <= c <= "鿿" for c in q_norm)
     if has_chinese:
-        query = db.query(DictionaryEntry).filter(
-            DictionaryEntry.book_id == book_id,
-            DictionaryEntry.definition_cn.ilike(f"%{q.strip()}%"),
-        )
+        for r in (
+            db.query(DictionaryEntry)
+            .filter(
+                DictionaryEntry.book_id == book_id,
+                DictionaryEntry.definition_cn.ilike(f"%{q_norm}%"),
+            )
+            .order_by(DictionaryEntry.word.asc())
+            .limit(limit)
+            .all()
+        ):
+            seen.setdefault(r.id, r)
 
-    results = query.order_by(DictionaryEntry.word.asc()).limit(limit).all()
+    results = list(seen.values())[:limit]
     return {
         "results": [
             {
@@ -93,6 +121,23 @@ def get_dictionary_word(
         )
         .first()
     )
+
+    # Fall back to the lemma so "students" resolves to "student".
+    if not entry:
+        for v in variants_for(word_text):
+            if v == word_text.strip().lower():
+                continue
+            entry = (
+                db.query(DictionaryEntry)
+                .filter(
+                    DictionaryEntry.word == v,
+                    DictionaryEntry.book_id == book_id,
+                )
+                .first()
+            )
+            if entry:
+                break
+
     if not entry:
         return {"found": False, "word": None}
     return {

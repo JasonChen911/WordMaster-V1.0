@@ -3,12 +3,15 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from typing import Literal
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Word, MistakeRecord
+from models import Word, MistakeRecord, WordMemoryState, BookWord
+from core import _get_active_book_id, _book_id_str
 from mistakes import record_mistake, SOURCE_DAILY, SOURCE_GAME
 
 logger = logging.getLogger(__name__)
@@ -25,6 +28,9 @@ def _serialize(row: MistakeRecord, word: Word) -> dict:
         "english": word.english,
         "chinese": word.chinese or "",
         "phonetic": word.phonetic or "",
+        "example_en": word.example_en or "",
+        "example_cn": word.example_cn or "",
+        "study_status": word.study_status or "new",
         "source": row.source,
         "source_label": _SOURCE_LABELS.get(row.source, row.source),
         "mistake_type": row.mistake_type or "",
@@ -36,13 +42,13 @@ def _serialize(row: MistakeRecord, word: Word) -> dict:
 
 @router.get("/api/mistakes")
 def list_mistakes(
-    source: str = "all",
+    source: Literal["all", "daily", "game"] = "all",
     db: Session = Depends(get_db),
 ):
     """List mistake-book entries, optionally filtered by source.
 
     ``source`` is one of ``all`` | ``daily`` | ``game``. A word with mistakes in
-    both sources appears in both filtered lists and (once) in ``all``.
+    both sources appears in both filtered lists. The UI groups all rows by word_id.
     """
     query = db.query(MistakeRecord, Word).join(Word, Word.id == MistakeRecord.word_id)
     if source in (SOURCE_DAILY, SOURCE_GAME):
@@ -68,36 +74,31 @@ def mistake_stats(db: Session = Depends(get_db)):
     }
 
 
+class MistakeInput(BaseModel):
+    word_id: int | None = Field(default=None, gt=0)
+    word: str = ""
+    source: Literal["daily", "game"]
+    mistake_type: str = Field(default="", max_length=80)
+    session_id: str = Field(default="", max_length=160)
+
+
 @router.post("/api/mistakes")
-async def record_mistake_route(request: Request, db: Session = Depends(get_db)):
-    """Record one mistake (upsert by word + source)."""
-    try:
-        body = await request.json()
-    except Exception:
-        return {"error": "请求体不是合法 JSON。"}
-
-    word_text = str(body.get("word") or "").strip().lower()
-    source = str(body.get("source") or "").strip()
-    mistake_type = str(body.get("mistake_type") or "").strip()
-
-    if not word_text:
-        return {"error": "缺少单词。"}
-    if source not in (SOURCE_DAILY, SOURCE_GAME):
-        return {"error": "无效的来源。"}
-
-    word = db.query(Word).filter(Word.english == word_text).first()
+def record_mistake_route(body: MistakeInput, db: Session = Depends(get_db)):
+    """Use the original word ID; retain text compatibility for older clients."""
+    if body.word_id is not None:
+        word = db.get(Word, body.word_id)
+    elif body.word.strip():
+        word = db.query(Word).filter(sa_func.lower(Word.english) == body.word.strip().lower()).first()
+    else:
+        raise HTTPException(422, "缺少单词。")
     if not word:
-        return {"error": "单词不存在。"}
-
-    record_mistake(
-        db,
-        word_id=word.id,
-        source=source,
-        mistake_type=mistake_type,
-        session_id=str(body.get("session_id") or ""),
-    )
+        raise HTTPException(404, "单词不存在。")
+    row = record_mistake(db, word_id=word.id, source=body.source,
+                         mistake_type=body.mistake_type, session_id=body.session_id)
+    if row is None:
+        raise HTTPException(500, "错词保存失败，请重试。")
     db.commit()
-    return {"success": True, "word": word.english, "source": source}
+    return {"success": True, "word": word.english, "word_id": word.id, "source": body.source}
 
 
 @router.post("/api/mistakes/{word_id}/review")
@@ -105,12 +106,19 @@ def add_to_review(word_id: int, db: Session = Depends(get_db)):
     """Put a mistake word back into today's review queue (due now)."""
     word = db.query(Word).filter(Word.id == word_id).first()
     if not word:
-        return {"error": "单词不存在。"}
+        raise HTTPException(404, "单词不存在。")
     word.next_review = datetime.now()
-    if word.study_status == "new":
-        word.study_status = "learning"
+    word.study_status = "learning"
+    word.is_mastered = False
+    memory = db.query(WordMemoryState).filter_by(word_id=word_id).first()
+    if memory:
+        memory.due = word.next_review
+    # Choose the current book if it contains the word, otherwise its original book.
+    links = db.query(BookWord).filter_by(word_id=word_id).all()
+    active = _get_active_book_id(db)
+    bid = next((link.book_id for link in links if link.book_id == active), links[0].book_id if links else None)
     db.commit()
-    return {"success": True, "word": word.english}
+    return {"success": True, "word": word.english, "book_id": _book_id_str(db, bid) if bid else None}
 
 
 @router.delete("/api/mistakes/{word_id}")

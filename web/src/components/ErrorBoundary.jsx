@@ -16,7 +16,7 @@ import ErrorFallback from './ErrorFallback'
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, recovering: false }
   }
 
   static getDerivedStateFromError(error) {
@@ -24,6 +24,10 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    if (window.wordmasterRecovery?.isChunkError(error)) {
+      this.setState({ recovering: window.wordmasterRecovery.recover(error) })
+      return
+    }
     // Log to console for debugging; in production this could go to a telemetry service.
     console.error(
       '[ErrorBoundary] React render error caught:\n',
@@ -34,7 +38,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null })
+    this.setState({ hasError: false, error: null, recovering: false })
   }
 
   render() {
@@ -43,7 +47,7 @@ export default class ErrorBoundary extends React.Component {
       if (typeof this.props.fallback === 'function') {
         return this.props.fallback(this.state.error, this.handleReset)
       }
-      return <ErrorFallback error={this.state.error} onReset={this.handleReset} />
+      return <ErrorFallback error={this.state.error} onReset={this.handleReset} recovering={this.state.recovering} />
     }
 
     return this.props.children

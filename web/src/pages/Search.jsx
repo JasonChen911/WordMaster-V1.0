@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search as SearchIcon, Volume2, Sparkles, X, BookOpen, ChevronRight } from 'lucide-react'
 import { api } from '../api'
-import { speak } from '../tts'
+import { speakWord, traceTts } from '../tts'
 
 function playWord(word, accent) {
   if (!word) return
-  speak(word, { accent: accent === 'uk' ? 'uk' : 'us' })
+  traceTts('[TTS_CLICK]', word)
+  speakWord(word, { accent: accent === 'uk' ? 'uk' : 'us' })
 }
 
 export default function Search() {

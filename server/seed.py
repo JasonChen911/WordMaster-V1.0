@@ -108,10 +108,17 @@ def parse_wordlist_line(line: str) -> tuple[str, str, str, str, str] | None:
         example = parts[3] if len(parts) > 3 else ""
         translation = parts[4] if len(parts) > 4 else ""
     else:
-        # Three-column rows without phonetic delimiters are treated as
-        # word/definition/example, which is safer for ordinary TXT files.
+        # Three-column rows without phonetic delimiters are usually
+        # word/definition/example. But some word-bank rows put a phonetic +
+        # secondary definition in column 3 (e.g. "[ə'səuʃiət] adj. 副的 n. 伙伴，同事"),
+        # which must never be stored as an example sentence.
         definition = parts[1]
-        example = parts[2]
+        third = parts[2]
+        if third.startswith("[") or third.startswith("/"):
+            definition = f"{parts[1]} {third}"
+            example = ""
+        else:
+            example = third
 
     if not any((phonetic, definition, example, translation)):
         return None

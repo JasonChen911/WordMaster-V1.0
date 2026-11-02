@@ -36,20 +36,31 @@ function getAudio() {
 // Monotonic id so stale audio callbacks are ignored after a newer play.
 let _playId = 0
 
-// URL / audio-ref patterns that must NEVER be spoken as text.
-const URL_PATTERN = /^(https?:\/\/|ftp:\/\/|www\.)/i
-const AUDIO_EXT_PATTERN = /\.(mp3|wav|ogg|m4a|spx|aac|flac)(\?.*)?$/i
-const SOUND_REF_PATTERN = /^(sound|dict|mdx|mdict):\/\//i
-
-function isUrlLike(text) {
-  const t = String(text).trim()
-  return URL_PATTERN.test(t) || AUDIO_EXT_PATTERN.test(t) || SOUND_REF_PATTERN.test(t)
+const UNSAFE_TEXT = /https?:\/\/|www\.|\.(mp3|wav|ogg|m4a|spx|aac|flac)|[<>{}\[\]]|(?:sound|dict|mdx|mdict):/i
+export function traceTts(tag, value) {
+  if (import.meta.env?.DEV) console.debug(tag, typeof value === 'object' ? JSON.stringify(value) : value)
+}
+function validText(text) {
+  return typeof text === 'string' && !!text.trim() && !UNSAFE_TEXT.test(text)
+}
+function validWord(text) {
+  return validText(text) && /^[a-z]+(?:[-'’][a-z]+)*$/i.test(text.trim())
+}
+export function speakWord(word, opts = {}) {
+  traceTts('[TTS_INPUT]', word)
+  if (!validWord(word)) {
+    traceTts('[TTS_INPUT]', { blocked: true, value: word })
+    opts.onEnd?.()
+    return false
+  }
+  speak(word.trim(), opts)
+  return true
 }
 
 function _backendUrl(text, accent, speed) {
   const voice = accent === 'uk' ? 'uk' : 'us'
   const s = SPEED_VALUES[speed] ?? 1.0
-  return `/api/audio/${encodeURIComponent(text)}?voice=${voice}&speed=${s}`
+  return `/api/audio/${encodeURIComponent(text)}?voice=${voice}&speed=${s}&tts=v4`
 }
 
 function _systemVoice() {
@@ -74,15 +85,19 @@ function _systemSpeak(text, accent, speed, onEnd) {
   if (voice) u.voice = voice
   u.onend = () => onEnd?.()
   u.onerror = () => onEnd?.()
+  traceTts('[TTS_PLAY]', { path: 'system', text })
   window.speechSynthesis.speak(u)
 }
 
 /** Stop whatever is currently playing. */
 export function stop() {
+  ++_playId
   const a = getAudio()
   a.pause()
   a.onended = null
   a.onerror = null
+  a.onloadedmetadata = null
+  a.onplaying = null
   a.removeAttribute('src')
   a.load()
   if (window.speechSynthesis) window.speechSynthesis.cancel()
@@ -100,49 +115,53 @@ export function speak(text, opts = {}) {
   const speed = opts.speed || getSpeed()
   const onEnd = opts.onEnd
 
-  if (typeof text !== 'string') {
-    console.error('[TTS] refuse non-string input:', text)
-    onEnd?.(); return
+  traceTts('[TTS_INPUT]', text)
+  if (!validText(text)) {
+    traceTts('[TTS_INPUT]', { blocked: true, value: text })
+    onEnd?.()
+    return false
   }
   const clean = text.trim()
-  if (!clean) { onEnd?.(); return }
-  if (isUrlLike(clean)) {
-    console.error('[TTS] refuse URL-like text:', clean)
-    onEnd?.(); return
-  }
-  if (import.meta.env?.DEV) console.debug('[TTS WORD]', clean)
-
-  const id = ++_playId
-  stop()
-
-  const a = getAudio()
-  a.onended = () => { if (id === _playId) onEnd?.() }
-  a.onerror = () => {
-    if (id !== _playId) return
-    _systemSpeak(clean, accent, speed, onEnd)
-  }
-  a.src = _backendUrl(clean, accent, speed)
-  a.play().catch(() => {
-    if (id === _playId) _systemSpeak(clean, accent, speed, onEnd)
+  let fellBack = false
+  playAudioUrl(_backendUrl(clean, accent, speed), {
+    onEnd,
+    onError: () => {
+      if (fellBack) return
+      fellBack = true
+      _systemSpeak(clean, accent, speed, onEnd)
+    },
   })
+  return true
 }
 
-/**
- * Play an audio-file URL directly (NOT through TTS). Used when an API returns an
- * ``audio_url`` field — that URL must go to the <audio> player, never to speak().
- */
-export function playAudioUrl(url) {
-  if (typeof url !== 'string' || !URL_PATTERN.test(url.trim())) {
-    console.error('[TTS] playAudioUrl requires an http(s) URL, got:', url)
-    return
+/** Audio addresses never enter a text-to-speech function. */
+export function playAudioUrl(url, opts = {}) {
+  if (typeof url !== 'string' || !/^(https?:\/\/|\/api\/audio\/|blob:)/i.test(url.trim())) {
+    traceTts('[TTS_AUDIO_URL]', { blocked: true, value: url })
+    return false
   }
-  const id = ++_playId
   stop()
+  const id = _playId
   const a = getAudio()
-  a.onended = null
-  a.onerror = null
+  let failed = false
+  const fail = () => {
+    if (id !== _playId || failed) return
+    failed = true
+    a.onended = a.onerror = a.onloadedmetadata = null
+    a.pause()
+    a.removeAttribute('src')
+    a.load()
+    opts.onError?.()
+  }
+  a.onended = () => { if (id === _playId && !failed) { traceTts('[TTS_PLAY]', { state: 'ended', url }); opts.onEnd?.() } }
+  a.onplaying = () => { if (id === _playId && !failed) traceTts('[TTS_PLAY]', { state: 'playing', url }) }
+  a.onerror = fail
+  a.onloadedmetadata = () => traceTts('[TTS_PROVIDER_RESPONSE]', { url: a.currentSrc, duration: a.duration })
   a.src = url.trim()
-  a.play().catch(() => { if (id === _playId) { /* play failed */ } })
+  traceTts('[TTS_AUDIO_URL]', a.src)
+  traceTts('[TTS_PLAY]', { path: 'audio', url: a.src })
+  a.play().catch(fail)
+  return true
 }
 
 /**
@@ -152,7 +171,8 @@ export function playAudioUrl(url) {
 export function preload(text, opts = {}) {
   const accent = opts.accent || getAccent()
   const speed = opts.speed || getSpeed()
-  if (!text) return
+  if (!validWord(text)) return
+  text = text.trim()
   const a = new Audio()
   a.preload = 'auto'
   a.src = _backendUrl(text, accent, speed)

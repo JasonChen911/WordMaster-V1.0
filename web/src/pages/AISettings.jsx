@@ -24,7 +24,7 @@ export default function AISettings() {
     try {
       const r = await fetch('/api/ai/config-status')
       const d = await r.json()
-      setStatus(d.available ? 'available' : 'not_configured')
+      setStatus(d.available ? 'configured' : 'not_configured')
       setHasUserKey(!!d.configured)
       setUsingDefault(!!d.using_default)
       if (d.configured) {
@@ -32,7 +32,7 @@ export default function AISettings() {
         setApiKey('')
       }
     } catch (e) {
-      setStatus('not_configured')
+      setStatus('unknown')
       setHasUserKey(false)
       setUsingDefault(false)
     }
@@ -72,8 +72,10 @@ export default function AISettings() {
       const r = await fetch('/api/ai/test-connection', { method: 'POST' })
       const d = await r.json()
       setTestResult(d)
+      setStatus(d.success ? 'verified' : 'failed')
     } catch (e) {
       setTestResult({ success: false, message: '网络错误，请检查连接。' })
+      setStatus('failed')
     } finally {
       setTesting(false)
     }
@@ -96,6 +98,17 @@ export default function AISettings() {
       setSaveMsg({ success: false, text: '删除失败，请重试。' })
     }
   }
+
+  const statusText = {
+    verified: 'AI 服务已连接',
+    configured: 'API Key 已配置，连接待测试',
+    failed: '连接失败',
+    not_configured: 'AI 服务未配置',
+    unknown: '状态获取失败',
+  }[status] || '正在检查配置'
+  const statusColor = status === 'verified' ? 'var(--success)'
+    : status === 'failed' || status === 'unknown' ? 'var(--danger)'
+      : 'var(--text-tertiary)'
 
   return (
     <div className="page animate-fade-in">
@@ -131,16 +144,16 @@ export default function AISettings() {
             <span
               className="inline-block w-2 h-2 rounded-full"
               style={{
-                backgroundColor: status === 'available' ? 'var(--success)' : 'var(--text-tertiary)',
-                boxShadow: status === 'available'
+                backgroundColor: statusColor,
+                boxShadow: status === 'verified'
                   ? '0 0 6px var(--success)'
                   : 'none',
               }}
             />
             <span className="text-xs font-medium" style={{
-              color: status === 'available' ? 'var(--success)' : 'var(--text-tertiary)',
+              color: statusColor,
             }}>
-              {status === 'available' ? 'AI 服务可用' : 'AI 服务未配置'}
+              {statusText}
             </span>
           </div>
         </div>
