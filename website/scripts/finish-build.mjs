@@ -5,7 +5,7 @@ const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'dist')
 const installer = process.env.WORDMASTER_INSTALLER || resolve(root, '../release/WordMaster_Setup.exe')
 const metadata = JSON.parse(await readFile(resolve(root, 'src/release.generated.json'), 'utf8'))
-if (metadata.available) {
+if (metadata.available && !metadata.externalUrl) {
   await mkdir(resolve(dist, 'downloads'), { recursive: true })
   if (metadata.chunked) {
     const bytes = await readFile(installer)
@@ -54,4 +54,4 @@ const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://w
 await writeFile(resolve(dist, 'sitemap.xml'), sitemap)
 await writeFile(resolve(dist, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`)
 await writeFile(resolve(dist, 'release.json'), JSON.stringify(metadata, null, 2) + '\n')
-console.log(`Static site built ${metadata.available ? 'with local installer' : 'from source only'}, license, sitemap, and robots.txt`)
+console.log(`Static site built ${metadata.externalUrl ? 'with external download' : metadata.available ? 'with local installer' : 'from source only'}, license, sitemap, and robots.txt`)

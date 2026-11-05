@@ -2,9 +2,10 @@
   "version": "0.1.0",
   "channel": "Beta",
   "platform": "Windows x64",
-  "installerFile": "WordMaster_Setup.exe",
-  "available": false,
+  "installerFile": "WordMaster_v0.1.0_20261105.zip",
+  "available": true,
   "chunked": false,
-  "installerBytes": 0,
-  "sha256": ""
+  "externalUrl": "https://pan.baidu.com/s/1m0mQUDGmkbKahWUpZGoLsQ?pwd=cqgj",
+  "installerBytes": 56397869,
+  "sha256": "ca5891b6fba287701162027def686ec1126b64005a40b12145c4002604d48654"
 }
