@@ -2,6 +2,24 @@
 
 **AI 驱动的自适应词汇学习与教学平台** — 让 AI 决定学什么，让 FSRS 决定什么时候复习。
 
+WordMaster 是一款面向英语学习者与教学场景的 Windows 桌面应用。它将词书学习、FSRS 自适应复习、学习数据分析、AI 材料生成与个性化辅导整合在同一条学习路径中；学习数据默认保存在本地，未配置 AI 服务时核心学习功能仍可使用。
+
+> 本仓库为私有项目，采用专有软件许可，保留所有权利。
+
+---
+
+## 🖼 产品界面
+
+| 今日学习任务 | 单词学习卡片 |
+|:---:|:---:|
+| ![WordMaster 首页与今日学习任务](docs/images/dashboard.jpg) | ![WordMaster 单词学习卡片](docs/images/study-card.jpg) |
+
+| 学习分析 | AI 学习助手 |
+|:---:|:---:|
+| ![WordMaster 学习分析](docs/images/analytics.jpg) | ![WordMaster AI 学习助手](docs/images/ai-tutor.jpg) |
+
+截图来自项目产品展示视频，展示首页任务、词汇学习、学习表现分析与 AI 导师等核心流程。
+
 ---
 
 ## ✨ 核心功能
@@ -199,6 +217,16 @@ WordMaster/
 ## 📄 许可证
 
 **专有软件，保留所有权利。**
+
+Copyright © 2026 JasonChen. All rights reserved.
+
+WordMaster is a proprietary English vocabulary learning application independently developed by JasonChen.
+
+This repository is intended for project presentation, documentation, release distribution, and issue tracking.
+
+Unless explicitly authorized, the publication of this repository does not grant permission to reproduce, modify, redistribute, or commercially exploit the proprietary software or its source code.
+
+WordMaster has obtained software copyright registration in China.
 
 本项目为内部 Beta 测试版本。未经作者许可，禁止复制、修改、再分发或商业使用。
 
