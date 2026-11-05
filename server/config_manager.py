@@ -10,12 +10,13 @@ import sys
 from pathlib import Path
 
 import keyring
+from platform_paths import user_data_dir
 
 HERE = Path(__file__).resolve().parent  # server/
 PROJECT = HERE.parent
 
-if getattr(sys, "frozen", False):
-    CONFIG_DIR = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster" / "user_data"
+if getattr(sys, "frozen", False) or os.getenv("WORDMASTER_DATA_DIR") or os.name != "nt":
+    CONFIG_DIR = user_data_dir() / "user_data"
 else:
     CONFIG_DIR = PROJECT / "user_data"
 
@@ -124,8 +125,8 @@ def set_deepseek_api_key(key: str):
             keyring.set_password(_KEYRING_SERVICE, _KEYRING_USERNAME, key.strip())
         except Exception:
             raise RuntimeError(
-                "无法访问 Windows 凭据管理器，API Key 保存失败。"
-                "请确认系统凭据服务正常运行。"
+                "无法访问系统密钥服务，API Key 保存失败。"
+                "请确认系统凭据服务已解锁并正常运行。"
             )
     else:
         # Delete key from keyring

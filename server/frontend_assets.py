@@ -8,6 +8,7 @@ import re
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+from platform_paths import user_data_dir
 
 APP_VERSION = '0.1.0'
 NO_CACHE = 'no-cache, no-store, must-revalidate'
@@ -17,7 +18,7 @@ BUILD_RE = re.compile(r'<meta\s+name="wordmaster-build"\s+content="([A-Za-z0-9_-
 def frontend_log(event, **fields):
     logger = logging.getLogger('wordmaster.frontend')
     if not logger.handlers:
-        root = Path(os.getenv('WORDMASTER_DATA_DIR') or (Path(os.getenv('APPDATA', Path.home())) / 'WordMaster'))
+        root = user_data_dir()
         (root / 'logs').mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(root / 'logs/frontend.log', maxBytes=2_000_000, backupCount=2, encoding='utf-8')
         handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))

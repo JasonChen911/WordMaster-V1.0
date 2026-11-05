@@ -161,14 +161,14 @@ export default function AISettings() {
         {/* Key display / input */}
         {hasUserKey && !editing ? (
           <>
-            {/* Status badge — no key preview (stored securely in Windows Credential Manager) */}
+            {/* Status badge — no key preview (stored in the OS credential service) */}
             <div
               className="rounded-xl p-3 mb-3 flex items-center gap-2"
               style={{ backgroundColor: 'var(--surface-tertiary)' }}
             >
               <Shield size={13} style={{ color: 'var(--success)' }} />
               <span className="text-sm font-medium" style={{ color: 'var(--success)' }}>
-                API Key 已安全存储在 Windows 凭据管理器
+                API Key 已安全存储在系统凭据管理器
               </span>
             </div>
 

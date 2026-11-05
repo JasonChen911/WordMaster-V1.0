@@ -1,0 +1,65 @@
+name: Linux package and release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip python3-gi python3-gi-cairo python3-tk gir1.2-gtk-3.0 gir1.2-webkit2-4.1 gnome-keyring xvfb
+          python3 -m pip install --user --break-system-packages Pillow
+      - name: Build web interface
+        run: npm ci && npm run build
+        working-directory: web
+      - name: Package Ubuntu deb
+        run: bash scripts/build_linux_deb.sh release
+      - name: Install and check desktop startup
+        run: |
+          sudo apt-get install -y ./release/WordMaster_*_ubuntu24.04_amd64.deb
+          test -f /usr/share/applications/wordmaster.desktop
+          dbus-run-session -- xvfb-run -a bash -c '
+            set -e
+            wordmaster > "$RUNNER_TEMP/wordmaster-smoke.log" 2>&1 & pid=$!
+            trap "kill $pid 2>/dev/null || true" EXIT
+            for i in $(seq 1 45); do
+              if grep -q http_server_ready "$HOME/.local/share/WordMaster/logs/frontend.log" 2>/dev/null; then
+                kill -0 "$pid"
+                exit 0
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then
+                cat "$RUNNER_TEMP/wordmaster-smoke.log"
+                exit 1
+              fi
+              sleep 1
+            done
+            cat "$RUNNER_TEMP/wordmaster-smoke.log"
+            exit 1
+          '
+      - name: Publish Linux prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v0.1.0-linux.1"
+          asset="$(find release -maxdepth 1 -name 'WordMaster_*_ubuntu24.04_amd64.deb' -print -quit)"
+          test -n "$asset"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber
+          else
+            gh release create "$tag" "$asset" --target "$GITHUB_SHA" --prerelease \
+              --title "WordMaster v0.1.0 Linux Beta" \
+              --notes "Ubuntu 24.04 x64 测试版。安装：sudo apt install ./$(basename "$asset")。AI 功能需要用户自己的 DeepSeek API Key；首次使用时需解锁系统密钥环。Windows 安装包仍通过官网百度网盘提供。"
+          fi

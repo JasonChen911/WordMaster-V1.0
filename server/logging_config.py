@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
+from platform_paths import user_data_dir
 
 
 def setup_logging(log_dir: Path = None, level: int = logging.INFO):
@@ -70,7 +71,7 @@ def startup_log(message: str) -> None:
     try:
         from datetime import datetime
 
-        data_dir = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster"
+        data_dir = user_data_dir()
         log_path = data_dir / "logs" / "startup.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
 

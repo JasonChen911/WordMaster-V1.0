@@ -31,9 +31,10 @@ FRONTEND_DIR = BASE_DIR / "web"
 sys.path.insert(0, str(BACKEND_DIR))
 
 from logging_config import startup_log  # noqa: E402
+from platform_paths import user_data_dir  # noqa: E402
 
 # ─── Logging ────────────────────────────────────────────────────
-DATA_DIR = Path(os.getenv("WORDMASTER_DATA_DIR") or (Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster"))
+DATA_DIR = user_data_dir()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 log_handlers = [

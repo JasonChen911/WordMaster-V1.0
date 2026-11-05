@@ -6,14 +6,12 @@ from pathlib import Path
 from sqlalchemy import create_engine, event as sqlalchemy_event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from platform_paths import user_data_dir
 
 # Determine data directory — works for tests, development and PyInstaller.
 data_dir_override = os.getenv("WORDMASTER_DATA_DIR")
-if data_dir_override:
-    DATA_DIR = Path(data_dir_override).expanduser().resolve()
-elif getattr(sys, 'frozen', False):
-    # Running as PyInstaller bundle → use user's AppData
-    DATA_DIR = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / "WordMaster"
+if data_dir_override or getattr(sys, 'frozen', False) or os.name != 'nt':
+    DATA_DIR = user_data_dir()
 else:
     DATA_DIR = Path(__file__).resolve().parent
 
@@ -24,8 +22,9 @@ DATABASE_PATH = DATA_DIR / "wordmaster.db"
 # Ship a clean, pre-initialized database for fast first launch. It is copied to
 # AppData only when the user has no database yet; existing user data is never
 # overwritten.
-if getattr(sys, "frozen", False) and not DATABASE_PATH.exists():
-    bundled_seed = Path(sys._MEIPASS) / "server" / "wordmaster_seed.db"
+if (getattr(sys, "frozen", False) or data_dir_override) and not DATABASE_PATH.exists():
+    bundle_root = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent
+    bundled_seed = bundle_root / "server" / "wordmaster_seed.db"
     if bundled_seed.exists():
         shutil.copy2(bundled_seed, DATABASE_PATH)
 

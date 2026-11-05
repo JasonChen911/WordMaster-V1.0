@@ -33,7 +33,7 @@ from routers import words, stats, ai, books, dictionary, search, audio, games, m
 load_dotenv()
 
 # ─── Logging ────────────────────────────────────────────────────
-log_dir = DATA_DIR / "logs" if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent / "logs"  # server/logs/
+log_dir = DATA_DIR / "logs" if getattr(sys, 'frozen', False) or os.getenv('WORDMASTER_DATA_DIR') or os.name != 'nt' else Path(__file__).resolve().parent / "logs"
 setup_logging(log_dir)
 logger = logging.getLogger(__name__)
 
