@@ -15,4 +15,5 @@ test('release metadata supports a source checkout without installer binaries', a
   const metadata = JSON.parse(await readFile(resolve(root, 'src/release.generated.json'), 'utf8'))
   assert.equal(metadata.available, false)
   assert.equal(metadata.sha256, '')
+  assert.equal(metadata.chunked, false)
 })

@@ -7,7 +7,21 @@ const installer = process.env.WORDMASTER_INSTALLER || resolve(root, '../release/
 const metadata = JSON.parse(await readFile(resolve(root, 'src/release.generated.json'), 'utf8'))
 if (metadata.available) {
   await mkdir(resolve(dist, 'downloads'), { recursive: true })
-  await copyFile(installer, resolve(dist, 'downloads/WordMaster_Setup.exe'))
+  if (metadata.chunked) {
+    const bytes = await readFile(installer)
+    const chunkSize = 8 * 1024 * 1024
+    const parts = []
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      const name = `part-${String(parts.length).padStart(2, '0')}.bin`
+      parts.push(`/downloads/${name}`)
+      await writeFile(resolve(dist, 'downloads', name), bytes.subarray(offset, offset + chunkSize))
+    }
+    const manifest = JSON.stringify({ parts, size: metadata.installerBytes, sha256: metadata.sha256, filename: metadata.installerFile })
+    const downloadPage = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>下载安装包 — WordMaster</title><style>body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#f6f9fa;color:#173440;margin:0;min-height:100vh;display:grid;place-items:center}main{background:white;border:1px solid #dce8eb;border-radius:16px;padding:32px;max-width:480px;margin:20px;box-shadow:0 12px 40px #17344012}h1{font-size:27px}p{line-height:1.7;color:#526771}button{border:0;border-radius:10px;background:#176e95;color:white;font:inherit;font-weight:650;padding:14px 22px;cursor:pointer}button:disabled{opacity:.6;cursor:wait}progress{width:100%;height:12px;accent-color:#176e95}a{color:#176e95}@media(prefers-color-scheme:dark){body{background:#101a20;color:#e8f2f5}main{background:#17252c;border-color:#33454d}p{color:#bccdd3}}</style></head><body><main><a href="/download/">← 返回下载页</a><h1>下载 WordMaster</h1><p>安装包将在浏览器中合并并校验，大小 ${(metadata.installerBytes / 1048576).toFixed(1)} MiB。请保持此页打开。</p><button id="start" type="button">开始下载</button><p id="status" role="status" aria-live="polite">准备就绪</p><progress id="progress" max="100" value="0"></progress></main><script>const manifest=${manifest};const button=document.getElementById('start'),status=document.getElementById('status'),progress=document.getElementById('progress');button.onclick=async()=>{button.disabled=true;let chunks=[],done=0;try{for(const path of manifest.parts){const response=await fetch(path);if(!response.ok)throw Error('下载分片失败：'+response.status);const chunk=await response.arrayBuffer();chunks.push(chunk);done+=chunk.byteLength;progress.value=Math.round(done/manifest.size*100);status.textContent='已下载 '+progress.value+'%，正在准备文件';}if(done!==manifest.size)throw Error('文件大小不符');const blob=new Blob(chunks,{type:'application/octet-stream'});status.textContent='正在校验文件…';const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer()))).map(x=>x.toString(16).padStart(2,'0')).join('');if(hash!==manifest.sha256)throw Error('文件校验失败，请重新下载');const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=manifest.filename;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status.textContent='下载已开始，SHA-256 校验通过';}catch(error){status.textContent=error.message;button.disabled=false;progress.value=0;}};</script></body></html>`
+    await writeFile(resolve(dist, 'download-file.html'), downloadPage)
+  } else {
+    await copyFile(installer, resolve(dist, 'downloads/WordMaster_Setup.exe'))
+  }
 }
 const agreement = await readFile(resolve(root, '../license_agreement.txt'), 'utf8')
 await writeFile(resolve(dist, 'license.txt'), `\uFEFF${agreement}`, 'utf8')

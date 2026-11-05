@@ -18,6 +18,7 @@ const info = {
   platform: 'Windows x64',
   installerFile: 'WordMaster_Setup.exe',
   available: bytes !== null,
+  chunked: bytes !== null && process.env.WORDMASTER_CHUNK_DOWNLOAD === '1',
   installerBytes: bytes === null ? 0 : (await stat(installer)).size,
   sha256: bytes === null ? '' : createHash('sha256').update(bytes).digest('hex'),
 }

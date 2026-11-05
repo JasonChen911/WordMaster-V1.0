@@ -4,6 +4,7 @@
   "platform": "Windows x64",
   "installerFile": "WordMaster_Setup.exe",
   "available": false,
+  "chunked": false,
   "installerBytes": 0,
   "sha256": ""
 }
