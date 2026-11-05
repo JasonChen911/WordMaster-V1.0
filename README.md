@@ -2,9 +2,9 @@
 
 **AI 驱动的自适应词汇学习与教学平台** — 让 AI 决定学什么，让 FSRS 决定什么时候复习。
 
-WordMaster 是一款面向英语学习者与教学场景的 Windows 桌面应用。它将词书学习、FSRS 自适应复习、学习数据分析、AI 材料生成与个性化辅导整合在同一条学习路径中；学习数据默认保存在本地，未配置 AI 服务时核心学习功能仍可使用。
+WordMaster 是一款面向英语学习者与教学场景的桌面应用，支持 Windows，并提供 Ubuntu 24.04 x64 测试包。它将词书学习、FSRS 自适应复习、学习数据分析、AI 材料生成与个性化辅导整合在同一条学习路径中；学习数据默认保存在本地，未配置 AI 服务时核心学习功能仍可使用。
 
-> 本仓库公开提供源码，采用专有软件使用协议，尚未授予开源许可证。GitHub 仓库不提供 WordMaster 本体或安装包；请勿将源码可见误认为允许再分发。
+> 本仓库公开提供源码，采用专有软件使用协议，尚未授予开源许可证。源码仓库不包含安装包；Linux 测试包单独作为 GitHub Release 附件发布，Windows 安装包仍通过官网提供。请勿将源码可见误认为允许再分发。
 
 ---
 
@@ -71,7 +71,7 @@ SQLite（SQLAlchemy ORM）
 
 WordMaster 的 AI 功能使用 **DeepSeek API**（外部大模型服务）。
 
-- API Key 通过应用内「设置 → AI 服务」配置，存储于 **Windows 凭据管理器（keyring）**，不写入源码、不记录日志、不回传前端。
+- API Key 通过应用内「设置 → AI 服务」配置，存储于系统密钥服务（Windows 凭据管理器或 Linux Secret Service），不写入源码、不记录日志、不回传前端。
 - 未配置 API Key 时，所有基础学习功能仍可正常使用。
 
 ---
@@ -96,6 +96,17 @@ WordMaster 的 AI 功能使用 **DeepSeek API**（外部大模型服务）。
 旧的艾宾浩斯固定间隔已废弃，仅作兼容保留。
 
 ---
+
+## 🐧 Ubuntu 24.04 测试版
+
+从 [Linux Beta Release](https://github.com/JasonChen911/WordMaster-V1.0/releases/tag/v0.1.0-linux.1) 下载 `WordMaster_0.1.0_ubuntu24.04_amd64.deb`，在 Ubuntu 24.04 x64 桌面执行：
+
+```bash
+sudo apt install ./WordMaster_0.1.0_ubuntu24.04_amd64.deb
+wordmaster
+```
+
+安装包依赖系统的 GTK 3、WebKit2GTK 与 Secret Service。学习数据保存在 `~/.local/share/WordMaster/`；AI 功能需要用户自己的 DeepSeek API Key 和已解锁的系统密钥环。该包已在 Ubuntu 24.04 的自动化环境通过安装及桌面启动检查，其他发行版尚未验证。
 
 ## 🚀 开发环境
 

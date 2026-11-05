@@ -75,7 +75,7 @@ export default function Chrome({ children }: { children: ReactNode }) {
           <small>© 2026 JasonChen · v0.1.0 Beta</small>
         </div>
         <div><strong>探索</strong><Link to="/#features">功能</Link><Link to="/#intelligence">AI Tutor</Link><Link to="/#memory">记忆引擎</Link></div>
-        <div><strong>获取</strong><Link to="/download/">Windows 下载</Link><Link to="/changelog/">更新日志</Link><a href="/license/">当前使用协议</a></div>
+        <div><strong>获取</strong><Link to="/download/">软件下载</Link><Link to="/changelog/">更新日志</Link><a href="/license/">当前使用协议</a></div>
         <div><strong>项目</strong><Link to="/#about">关于</Link><Link to="/#source">源码状态</Link><a href="https://github.com/JasonChen911/WordMaster-V1.0" target="_blank" rel="noopener noreferrer">GitHub 源码</a></div>
       </div>
     </footer>

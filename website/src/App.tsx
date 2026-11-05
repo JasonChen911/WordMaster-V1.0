@@ -11,8 +11,8 @@ export default function App() {
   const reduceMotion = useReducedMotion()
   useEffect(() => {
     const pages: Record<string, { title: string; description: string }> = {
-      '/': { title: 'WordMaster — 让每一次记忆，都更有价值', description: 'WordMaster：融合 AI 学习辅导与 FSRS 间隔重复的 Windows 英语学习软件。让每一次记忆，都更有价值。' },
-      '/download/': { title: '下载 WordMaster — Windows 安装包', description: '下载 WordMaster v0.1.0 Beta Windows 安装包，查看安装说明、系统要求和版本信息。' },
+      '/': { title: 'WordMaster — 让每一次记忆，都更有价值', description: 'WordMaster：融合 AI 学习辅导与 FSRS 间隔重复的英语学习软件，提供 Windows 与 Ubuntu 24.04 测试版。' },
+      '/download/': { title: '下载 WordMaster — Windows 与 Linux', description: '下载 WordMaster v0.1.0 Beta Windows 安装包或 Ubuntu 24.04 x64 测试包，查看安装说明与系统要求。' },
       '/changelog/': { title: '更新日志 — WordMaster', description: '查看 WordMaster v0.1.0 Beta 的已实现功能与更新记录。' },
     }
     const page = pages[location.pathname] ?? pages['/']

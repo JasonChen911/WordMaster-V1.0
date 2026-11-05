@@ -6,7 +6,7 @@ import release from '../release.generated.json'
 const groups = [
   { title: '学习与记忆', items: ['接入 FSRS 间隔重复，按四级反馈调整单词复习安排。', '在学习页解释为什么今天需要复习这个词。', '加入拼写、填空、游戏化练习和错词管理。'] },
   { title: 'AI 辅助', items: ['三位 AI 导师支持独立对话与本机历史记录。', 'AI 阅读可保存生成的文章、题目与题型，并可逐条删除。', '从本地材料提取重点词汇，确认后生成词书。'] },
-  { title: '桌面体验', items: ['优化启动检测与前端资源校验。', '加入可选背景、深色模式和发音设置。', '提供 Windows 安装程序及独立本体文件。'] },
+  { title: '桌面体验', items: ['优化启动检测与前端资源校验。', '加入可选背景、深色模式和发音设置。', '提供 Windows 安装程序及 Ubuntu 24.04 x64 测试包。'] },
 ]
 
 export default function ChangelogPage() {
