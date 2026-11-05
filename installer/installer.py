@@ -15,6 +15,12 @@ VERSION = "0.1.0"
 DEFAULT_INSTALL_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Programs" / APP_NAME
 INSTALLER_DIR = Path(__file__).resolve().parent  # directory containing this script
 BUNDLE_DIR = INSTALLER_DIR / "bundle"             # bundled files to install
+INSTALLER_ASSETS = INSTALLER_DIR / "installer_assets"
+LOGO_PATH = INSTALLER_ASSETS / "window_icon.png"
+WELCOME_LOGO_PATH = INSTALLER_ASSETS / "welcome_logo.png"
+ICON_PATH = INSTALLER_ASSETS / "icon.ico"
+if not ICON_PATH.is_file():
+    ICON_PATH = INSTALLER_DIR.parent / "resources" / "icon.ico"
 
 
 
@@ -25,7 +31,13 @@ class Installer:
         self.root.title(f"{APP_NAME} {VERSION} 安装程序")
         self.root.geometry("560x460")
         self.root.resizable(False, False)
-        self.root.configure(bg="#f5f5f5")
+        self.root.configure(bg="#ffffff")
+        # Tk uses its feather icon unless the window icon is set explicitly.
+        self.app_icon = tk.PhotoImage(file=str(LOGO_PATH))
+        if sys.platform == "win32":
+            self.root.iconbitmap(default=str(ICON_PATH))
+        self.root.iconphoto(True, self.app_icon)
+        self.welcome_icon = tk.PhotoImage(file=str(WELCOME_LOGO_PATH))
 
         # Center on screen
         self.root.update_idletasks()
@@ -42,8 +54,8 @@ class Installer:
         self.step = 0
 
         # style
-        self.bg = "#f5f5f5"
-        self.accent = "#6366f1"
+        self.bg = "#ffffff"
+        self.accent = "#343a8f"
         self.fg = "#1a1a1c"
         self.fg2 = "#6b6b70"
 
@@ -85,14 +97,24 @@ class Installer:
     def show_welcome(self):
         self.clear()
         self.step = 0
-        tk.Label(self.root, text="📚", font=("", 48), bg=self.bg).pack(pady=(30, 8))
-        self.heading("WordMaster 智能英语学习软件")
-        self.subtext("版本 " + VERSION + "  |  基于艾宾浩斯记忆曲线的 AI 辅助学习工具")
-        self.divider()
-        tk.Label(self.root, text="• 内置 CET4/CET6/IELTS/TOEFL 词库\n• AI 单词解释 + 游戏化学习\n• 艾宾浩斯间隔复习系统",
-                 font=("Microsoft YaHei UI", 9), fg=self.fg2, bg=self.bg,
-                 justify="left").pack(pady=(12, 16))
+        tk.Label(self.root, image=self.welcome_icon, bg=self.bg).pack(pady=(34, 16))
+        tk.Label(self.root, text="欢迎安装 WordMaster",
+                 font=("Microsoft YaHei UI", 18, "bold"),
+                 fg=self.fg, bg=self.bg).pack()
+        tk.Label(self.root, text="把单词学会，把进步留下",
+                 font=("Microsoft YaHei UI", 10),
+                 fg=self.fg2, bg=self.bg).pack(pady=(5, 0))
+
+        features = tk.Frame(self.root, bg="#f5f6fa", padx=20, pady=12)
+        features.pack(fill="x", padx=58, pady=(24, 18))
+        for line in ("词库学习与间隔复习", "AI 辅助理解与阅读练习", "学习记录保存在本机"):
+            tk.Label(features, text="•  " + line,
+                     font=("Microsoft YaHei UI", 9),
+                     fg="#484b59", bg="#f5f6fa", anchor="w").pack(fill="x", pady=2)
+
         self.btn_primary("开始安装", self.show_license)
+        tk.Label(self.root, text=f"版本 {VERSION}", font=("Microsoft YaHei UI", 8),
+                 fg="#9a9ca7", bg=self.bg).pack(pady=(1, 0))
 
     def show_license(self):
         self.clear()
@@ -100,16 +122,8 @@ class Installer:
         self.heading("软件许可协议")
         self.subtext("请仔细阅读以下协议。勾选「我接受协议」后方可继续安装。")
 
-        license_text = (
-            "WordMaster 软件使用协议\n\n"
-            "本软件为个人独立开发的学习项目。\n\n"
-            "授权：个人用户可免费安装使用，数据存储在本地。\n\n"
-            "未经开发者授权，禁止以下行为：\n"
-            "  1. 商业盗版和销售\n"
-            "  2. 非法传播\n"
-            "  3. 修改后重新发布\n\n"
-            "开发者：JasonChen\n"
-        )
+        agreement_path = Path(getattr(sys, "_MEIPASS", INSTALLER_DIR.parent)) / "license_agreement.txt"
+        license_text = agreement_path.read_text(encoding="utf-8")
 
         outer = tk.Frame(self.root, bg="#f0f0f0", relief="solid", borderwidth=1, bd=1)
         outer.pack(fill="x", padx=40, pady=6)
@@ -118,8 +132,10 @@ class Installer:
                               bg="#fafafa", fg="#333", relief="flat", height=10,
                               padx=14, pady=10, state="normal")
         text_widget.insert("1.0", license_text)
-        text_widget.configure(state="disabled")
-        text_widget.pack(fill="x")
+        scrollbar = ttk.Scrollbar(outer, orient="vertical", command=text_widget.yview)
+        text_widget.configure(state="disabled", yscrollcommand=scrollbar.set)
+        text_widget.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
         # Checkbox with visible feedback
         self.license_var = tk.BooleanVar(value=False)

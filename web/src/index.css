@@ -396,6 +396,30 @@
   animation: msgIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+@keyframes chatBubbleExpand {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+@keyframes chatBubbleReveal {
+  from { opacity: 0; transform: translateY(9px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.chat-message-enter {
+  display: grid;
+  grid-template-rows: 0fr;
+  animation: chatBubbleExpand 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.chat-message-enter > .chat-message-inner {
+  min-height: 0;
+  overflow: hidden;
+  transform-origin: top left;
+  animation: chatBubbleReveal 0.34s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-message-enter { animation: none; grid-template-rows: 1fr; }
+  .chat-message-enter > .chat-message-inner { animation: none; }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Game Animations — WordPuzzle & FillBlank
    ═══════════════════════════════════════════════════════════════ */

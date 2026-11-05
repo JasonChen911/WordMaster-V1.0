@@ -15,7 +15,6 @@ export default function Search() {
   const [loading, setLoading] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [selectedWord, setSelectedWord] = useState(null)
-  const [selectedLoading, setSelectedLoading] = useState(false)
   const [activeAccent, setActiveAccent] = useState('us')
   const inputRef = useRef(null)
 
@@ -44,13 +43,11 @@ export default function Search() {
   useEffect(() => { doSearch(debouncedQuery) }, [debouncedQuery, doSearch])
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  const handleSelectWord = async (word) => {
-    setSelectedLoading(true)
+  const handleSelectWord = (word) => {
+    // Keep the replay in the click gesture so the embedded browser permits it.
+    playWord(word.english || word.word, 'us')
     setSelectedWord(word)
     setActiveAccent('us')
-    // Auto-play US pronunciation
-    setTimeout(() => playWord(word.english || word.word, 'us'), 400)
-    setSelectedLoading(false)
   }
 
   const clearSearch = () => { setQuery(''); setResults([]); setSelectedWord(null) }

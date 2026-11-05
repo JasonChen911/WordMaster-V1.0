@@ -8,6 +8,7 @@ node_modules/
 # --- Build output ---
 dist/
 dist-*/
+release/
 build/
 *.egg-info/
 *.egg
@@ -76,3 +77,4 @@ htmlcov/
 .pipcache/
 .testdata/
 .tmp/
+.internal-test/

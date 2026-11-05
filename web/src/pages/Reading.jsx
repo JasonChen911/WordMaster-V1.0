@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Sparkles, BookOpen, Loader2, Volume2, ChevronDown, ChevronUp, Shuffle, Check, X, Search, PlusCircle, CheckCircle2, Pause, Square, Play } from 'lucide-react'
+import { ArrowLeft, Sparkles, BookOpen, Loader2, Volume2, ChevronDown, ChevronUp, Shuffle, Check, X, Search, PlusCircle, CheckCircle2, Pause, Square, Play, History, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import SegmentControl from '../components/SegmentControl'
 import { api } from '../api'
 import { speakWord as pronounceWord, getAccent } from '../tts'
 import { ReadingPlayer } from '../readingPlayer'
+import Modal from '../components/Modal'
 
 const EXAMS = [
   { id: '高中英语', label: '高中英语' },
@@ -91,6 +92,11 @@ export default function Reading() {
   const [words, setWords] = useState(500)
   const [loading, setLoading] = useState(false)
   const [article, setArticle] = useState(null)
+  const [history, setHistory] = useState([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [currentHistoryId, setCurrentHistoryId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [error, setError] = useState(null)
   const [fontSize, setFontSize] = useState(16)
   const [selectedVocab, setSelectedVocab] = useState(null)
@@ -100,6 +106,51 @@ export default function Reading() {
   const [showReview, setShowReview] = useState(false)
   const [addedWords, setAddedWords] = useState(() => new Set())
   const allDone = article?.questions?.length > 0 && article.questions.every(q => userAnswers[q.question] != null)
+
+  const refreshHistory = async () => {
+    try {
+      const r = await fetch('/api/ai/reading-history')
+      if (r.ok) setHistory((await r.json()).items || [])
+    } catch (e) { console.error('reading history unavailable', e) }
+  }
+  useEffect(() => { refreshHistory() }, [])
+
+  const openHistoryItem = async (id) => {
+    setHistoryLoading(true); setError(null)
+    try {
+      const r = await fetch(`/api/ai/reading-history/${id}`)
+      if (!r.ok) throw new Error('无法打开这条记录')
+      playerRef.current?.stop()
+      setArticle(await r.json())
+      setCurrentHistoryId(id)
+      setUserAnswers({}); setShowReview(false)
+      setShowVocab(false); setSelectedVocab(null)
+      setShowHistory(false)
+    } catch (e) { setError(e.message) }
+    finally { setHistoryLoading(false) }
+  }
+
+  const deleteHistoryItem = async (item) => {
+    if (!item || historyLoading) return
+    setHistoryLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/ai/reading-history/${item.id}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error('删除阅读记录失败，请重试。')
+      setHistory(previous => previous.filter(record => record.id !== item.id))
+      if (currentHistoryId === item.id) {
+        playerRef.current?.stop()
+        setArticle(null)
+        setCurrentHistoryId(null)
+        setUserAnswers({})
+        setShowReview(false)
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   // ── Long-form reading player (state machine: IDLE/LOADING/PLAYING/PAUSED/…) ──
   const playerRef = useRef(null)
@@ -129,6 +180,7 @@ export default function Reading() {
 
   const handleGenerate = async () => {
     setLoading(true); setError(null); setArticle(null)
+    setCurrentHistoryId(null)
     setUserAnswers({}); setShowReview(false)
     try {
       const r = await fetch('/api/ai/generate-reading', {
@@ -137,7 +189,7 @@ export default function Reading() {
       })
       const d = await r.json()
       if (d.error) { setError(d.error) }
-      else { setArticle(d); setShowVocab(false); setSelectedVocab(null) }
+      else { setArticle(d); setCurrentHistoryId(d.history_id ?? null); setShowVocab(false); setSelectedVocab(null); refreshHistory() }
     } catch (e) { setError('网络错误，请检查连接。') }
     finally { setLoading(false) }
   }
@@ -195,6 +247,39 @@ export default function Reading() {
           <h1 className="text-lg font-bold tracking-tight" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>AI 阅读</h1>
           <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>生成专属英语阅读材料 · 智能出题 · 详细解析</p>
         </div>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <button onClick={() => setShowHistory(v => !v)}
+          aria-expanded={showHistory}
+          className="ios-button ios-button-secondary"
+          style={{ width: '100%', justifyContent: 'center' }}>
+          <History size={16} /> 历史记录 ({history.length})
+        </button>
+        {showHistory && (
+          <div style={{ marginTop: '0.6rem', padding: '0.6rem', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--surface-secondary)', border: '1px solid var(--border)', maxHeight: 280, overflowY: 'auto' }}>
+            {history.length === 0 && <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>还没有生成记录</p>}
+            {history.map(item => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
+                <button onClick={() => openHistoryItem(item.id)} disabled={historyLoading}
+                  style={{ flex: 1, minWidth: 0, textAlign: 'left', padding: '0.65rem', border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                  <span className="text-sm font-semibold">{item.title}</span>
+                  <span className="text-xs block mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {new Date(item.created_at).toLocaleString('zh-CN')} · {item.exam} · {item.level} · {item.topic}
+                  </span>
+                  <span className="text-xs block mt-1" style={{ color: 'var(--accent)' }}>
+                    题型：{item.question_types?.join('、') || '选择题'}
+                  </span>
+                </button>
+                <button type="button" onClick={() => setDeleteTarget(item)} disabled={historyLoading}
+                  aria-label={`删除阅读记录：${item.title}`} title="删除这条记录"
+                  style={{ padding: '0.65rem', marginRight: '0.25rem', color: 'var(--danger)', cursor: 'pointer' }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Config card */}
@@ -378,7 +463,7 @@ export default function Reading() {
                   const chosen = userAnswers[q.question]
                   return (
                     <div key={qi} style={{ padding: '0.85rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}>
-                      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{qi + 1}. {q.question}</p>
+                      <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{qi + 1}. <span className="text-xs" style={{ color: 'var(--accent)' }}>[{q.type || '选择题'}]</span> {q.question}</p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                         {q.options?.map((opt, oi) => {
                           const letter = String.fromCharCode(65 + oi)
@@ -494,6 +579,10 @@ export default function Reading() {
           )}
         </div>
       )}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
+        title="删除阅读记录？"
+        message={deleteTarget ? `“${deleteTarget.title}”及其题目会从本机永久删除。` : ''}
+        confirmLabel="删除" onConfirm={() => deleteHistoryItem(deleteTarget)} danger />
     </div>
   )
 }

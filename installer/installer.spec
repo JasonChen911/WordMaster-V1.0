@@ -38,6 +38,12 @@ installer_datas = []
 for f in BUNDLE.rglob('*'):
     if f.is_file():
         installer_datas.append((str(f), str(Path('bundle') / f.relative_to(BUNDLE).parent)))
+installer_datas.extend([
+    (str(ROOT / 'installer_assets/welcome_logo.png'), 'installer_assets'),
+    (str(ROOT / 'installer_assets/window_icon.png'), 'installer_assets'),
+    (str(PROJECT / 'resources/icon.ico'), 'installer_assets'),
+    (str(PROJECT / 'license_agreement.txt'), '.'),
+])
 
 a = Analysis(
     [str(ROOT / 'installer.py')],
@@ -66,7 +72,7 @@ exe = EXE(
     a.datas,
     [],
     name='WordMaster_Setup',
-    icon=str(ROOT / 'WordMaster_Setup.ico'),
+    icon=str(PROJECT / 'resources/icon.ico'),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

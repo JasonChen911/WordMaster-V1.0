@@ -4,7 +4,9 @@ import logging
 import json as json_module
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+from typing import Literal
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,57 @@ from ai.services import get_example, analyze_word_struggle, generate_exercises
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class TutorConversationCreate(BaseModel):
+    tutor: Literal['emma', 'alex', 'sophia']
+
+
+class TutorMessageCreate(BaseModel):
+    tutor: Literal['emma', 'alex', 'sophia']
+    role: Literal['user', 'assistant']
+    content: str = Field(min_length=1, max_length=10000)
+
+
+@router.get('/api/ai/tutor/conversations')
+def tutor_conversations(tutor: Literal['emma', 'alex', 'sophia']):
+    from tutor_history import list_conversations
+    return {'items': list_conversations(tutor)}
+
+
+@router.post('/api/ai/tutor/conversations')
+def tutor_conversation_create(body: TutorConversationCreate):
+    from tutor_history import create_conversation
+    return create_conversation(body.tutor)
+
+
+@router.get('/api/ai/tutor/conversations/{conversation_id}')
+def tutor_conversation_get(conversation_id: int, tutor: Literal['emma', 'alex', 'sophia']):
+    from tutor_history import get_conversation
+    conversation = get_conversation(conversation_id, tutor)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail='对话不存在')
+    return conversation
+
+
+@router.post('/api/ai/tutor/conversations/{conversation_id}/messages')
+def tutor_message_create(conversation_id: int, body: TutorMessageCreate):
+    from tutor_history import append_message
+    try:
+        message = append_message(conversation_id, body.tutor, body.role, body.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if message is None:
+        raise HTTPException(status_code=404, detail='对话不存在')
+    return message
+
+
+@router.delete('/api/ai/tutor/conversations/{conversation_id}')
+def tutor_conversation_delete(conversation_id: int, tutor: Literal['emma', 'alex', 'sophia']):
+    from tutor_history import delete_conversation
+    if not delete_conversation(conversation_id, tutor):
+        raise HTTPException(status_code=404, detail='对话不存在')
+    return {'deleted': True}
 
 
 @router.post("/api/ai/explain", response_model=AIExplainOut)
@@ -144,8 +197,8 @@ async def ai_generate_reading(request: Request):
         "2. 文章自然流畅，不要像机器生成\n3. 适合英语学习者阅读\n4. 不要出现中文\n\n"
         "请严格按以下JSON格式输出（只输出纯JSON，不要markdown代码块）：\n"
         '{"title":"文章标题","content":"文章正文","vocabulary":[{"word":"词","meaning":"中文释义","example":"英文例句"}],'
-        '"questions":[{"question":"问题（英文）","options":["A.选项","B.选项","C.选项","D.选项"],"answer":"A","explanation":"中文解析：为什么选A，在原文哪里找到答案"}]}\n'
-        "vocabulary包含5-8个重点词汇，questions包含3-5道阅读理解选择题，每道题都要有详细中文explanation。"
+        '"questions":[{"type":"细节理解","question":"问题（英文）","options":["A.选项","B.选项","C.选项","D.选项"],"answer":"A","explanation":"中文解析：为什么选A，在原文哪里找到答案"}]}\n'
+        "vocabulary包含5-8个重点词汇，questions包含3-5道选择题；题型从细节理解、主旨大意、推理判断、词义猜测中选择，尽量多样；每道题都要有详细中文explanation。"
     )
 
     result = await chat_completion(
@@ -159,9 +212,41 @@ async def ai_generate_reading(request: Request):
 
     raw = _strip_code_fence(result["content"])
     try:
-        return json_module.loads(raw)
+        article = json_module.loads(raw)
+        if not isinstance(article, dict) or not isinstance(article.get('questions'), list):
+            return {"error": "AI 返回格式异常，请重试。"}
+        for question in article['questions']:
+            if isinstance(question, dict):
+                question.setdefault('type', '选择题')
+        from reading_history import save_reading
+        article['history_id'] = save_reading(article, exam, level, topic)
+        return article
     except json_module.JSONDecodeError:
         return {"error": "AI 返回格式异常，请重试。"}
+
+
+@router.get("/api/ai/reading-history")
+def ai_reading_history():
+    from reading_history import list_readings
+    return {"items": list_readings()}
+
+
+@router.get("/api/ai/reading-history/{reading_id}")
+def ai_reading_history_item(reading_id: int):
+    from fastapi import HTTPException
+    from reading_history import get_reading
+    article = get_reading(reading_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return article
+
+
+@router.delete("/api/ai/reading-history/{reading_id}")
+def ai_reading_history_delete(reading_id: int):
+    from reading_history import delete_reading
+    if not delete_reading(reading_id):
+        raise HTTPException(status_code=404, detail='记录不存在')
+    return {'deleted': True}
 
 
 @router.post("/api/ai/chat")

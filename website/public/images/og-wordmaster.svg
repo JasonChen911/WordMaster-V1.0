@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#f9fbfd"/><stop offset="1" stop-color="#e8f2f7"/></linearGradient></defs>
+  <rect width="1200" height="630" fill="url(#g)"/>
+  <rect x="80" y="82" width="1040" height="466" rx="38" fill="#fff" stroke="#dbe7ee"/>
+  <rect x="124" y="126" width="80" height="80" rx="19" fill="#10191f"/>
+  <path d="M145 169c14-10 25-9 36 0v24c-12-9-23-9-36 0zm38 0c14-10 25-9 36 0v24c-12-9-23-9-36 0z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <text x="235" y="183" fill="#14212a" font-family="Arial, sans-serif" font-size="48" font-weight="700">WordMaster</text>
+  <text x="124" y="330" fill="#14212a" font-family="Arial, sans-serif" font-size="68" font-weight="700">让每一次记忆，</text>
+  <text x="124" y="415" fill="#14212a" font-family="Arial, sans-serif" font-size="68" font-weight="700">都更有价值。</text>
+  <text x="128" y="487" fill="#527083" font-family="Arial, sans-serif" font-size="29">Learn Smarter. Remember Longer.</text>
+</svg>

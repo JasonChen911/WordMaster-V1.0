@@ -1,6 +1,31 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Sparkles, Settings } from 'lucide-react'
+import { ArrowLeft, Send, Sparkles, Settings, History, Plus, Trash2 } from 'lucide-react'
+import { cleanTutorReply } from '../tutorText'
+import Modal from '../components/Modal'
+import emmaPortrait from '../assets/tutors/emma.webp'
+import alexPortrait from '../assets/tutors/alex.webp'
+import sophiaPortrait from '../assets/tutors/sophia.webp'
+
+const REPLY_GUIDE = '请先直接回答核心问题，再给最多3条可执行要点。每条尽量一句话；只有确有必要才举例。不要寒暄、重复问题、长篇铺垫，不要使用Markdown星号、标题符号或代码块。'
+
+async function historyRequest(path, options) {
+  const response = await fetch(`/api/ai/tutor/conversations${path}`, {
+    headers: { 'Content-Type': 'application/json' }, ...options,
+  })
+  if (!response.ok) throw new Error(`对话记录请求失败 (${response.status})`)
+  return response.json()
+}
+
+function TutorAvatar({ tutor, size, style }) {
+  return <img
+    src={tutor.portrait}
+    alt={`${tutor.name} 导师头像`}
+    width={size}
+    height={size}
+    style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, ...style }}
+  />
+}
 
 // ═══════════════════════════════════════════════════════════════
 // Crystalline Literacy — AI Tutor
@@ -11,7 +36,7 @@ const TUTORS = {
   emma: {
     name: 'Emma',
     role: '英语老师',
-    emoji: '👩‍🏫',
+    portrait: emmaPortrait,
     bg: '#6366f1',
     description: '解释单词用法、例句分析、语法讲解',
     system:
@@ -21,7 +46,7 @@ const TUTORS = {
   alex: {
     name: 'Alex',
     role: '词汇教练',
-    emoji: '🧑‍🎓',
+    portrait: alexPortrait,
     bg: '#10b981',
     description: '学习计划制定、复习进度分析',
     system:
@@ -31,7 +56,7 @@ const TUTORS = {
   sophia: {
     name: 'Sophia',
     role: '雅思导师',
-    emoji: '👩‍💼',
+    portrait: sophiaPortrait,
     bg: '#f59e0b',
     description: '雅思高频词汇、口语话题、写作表达',
     system:
@@ -44,29 +69,145 @@ export default function AITutor() {
   const navigate = useNavigate()
   const [tutor, setTutor] = useState('emma')
   const [messages, setMessages] = useState([])
+  const [conversations, setConversations] = useState([])
+  const [conversationId, setConversationId] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [saveError, setSaveError] = useState('')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const chatEndRef = useRef(null)
+  const [animatedMessageIndex, setAnimatedMessageIndex] = useState(null)
+  const chatScrollRef = useRef(null)
 
   const activeTutor = TUTORS[tutor]
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const scroller = chatScrollRef.current
+    if (!scroller) return
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+    if (animatedMessageIndex === null) return
+    const scrollTimer = setTimeout(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+    }, 420)
+    return () => clearTimeout(scrollTimer)
+  }, [messages, animatedMessageIndex])
+
+  useEffect(() => {
+    if (animatedMessageIndex === null) return
+    const timer = setTimeout(() => setAnimatedMessageIndex(null), 460)
+    return () => clearTimeout(timer)
+  }, [animatedMessageIndex])
+
+  useEffect(() => {
+    let cancelled = false
+    setHistoryLoading(true)
+    setMessages([])
+    setAnimatedMessageIndex(null)
+    setConversationId(null)
+    setConversations([])
+    setSaveError('')
+    const load = async () => {
+      try {
+        const list = await historyRequest(`?tutor=${tutor}`)
+        if (cancelled) return
+        setConversations(list.items)
+        if (list.items.length) {
+          const detail = await historyRequest(`/${list.items[0].id}?tutor=${tutor}`)
+          if (cancelled) return
+          setConversationId(detail.id)
+          setMessages(detail.messages)
+        }
+      } catch (e) {
+        if (!cancelled) setSaveError('无法读取已保存的对话，请稍后重试。')
+      } finally {
+        if (!cancelled) setHistoryLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [tutor])
+
+  const openConversation = async (id) => {
+    if (loading || historyLoading || id === conversationId) return
+    setHistoryLoading(true)
+    setSaveError('')
+    try {
+      const detail = await historyRequest(`/${id}?tutor=${tutor}`)
+      setConversationId(detail.id)
+      setMessages(detail.messages)
+      setAnimatedMessageIndex(null)
+      setHistoryOpen(false)
+    } catch (e) {
+      setSaveError('无法打开这段对话，请稍后重试。')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const newConversation = () => {
+    if (loading || historyLoading) return
+    setConversationId(null)
+    setMessages([])
+    setAnimatedMessageIndex(null)
+    setInput('')
+    setSaveError('')
+    setHistoryOpen(false)
+  }
+
+  const deleteConversation = async (item) => {
+    if (!item || loading || historyLoading) return
+    setHistoryLoading(true)
+    setSaveError('')
+    try {
+      await historyRequest(`/${item.id}?tutor=${tutor}`, { method: 'DELETE' })
+      const remaining = conversations.filter(conversation => conversation.id !== item.id)
+      setConversations(remaining)
+      if (conversationId === item.id) {
+        setAnimatedMessageIndex(null)
+        setConversationId(null)
+        setMessages([])
+        if (remaining.length) {
+          const detail = await historyRequest(`/${remaining[0].id}?tutor=${tutor}`)
+          setConversationId(detail.id)
+          setMessages(detail.messages)
+        }
+      }
+    } catch (e) {
+      setSaveError('删除对话失败，请重试。')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
 
   const sendMessage = async () => {
     const text = input.trim()
-    if (!text || loading) return
+    if (!text || loading || historyLoading) return
 
     const userMsg = { role: 'user', content: text }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
     setLoading(true)
+    setSaveError('')
 
     try {
+      let id = conversationId
+      if (!id) {
+        const created = await historyRequest('', {
+          method: 'POST', body: JSON.stringify({ tutor }),
+        })
+        id = created.id
+        setConversationId(id)
+        setConversations(prev => [created, ...prev])
+      }
+      await historyRequest(`/${id}/messages`, {
+        method: 'POST', body: JSON.stringify({ tutor, ...userMsg }),
+      })
+      setAnimatedMessageIndex(messages.length)
+      setMessages(prev => [...prev, userMsg])
+      setInput('')
+
       const apiMessages = [
-        { role: 'system', content: activeTutor.system },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'system', content: `${activeTutor.system} ${REPLY_GUIDE}` },
+        ...messages.slice(-30).map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text },
       ]
 
@@ -75,16 +216,21 @@ export default function AITutor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: apiMessages }),
       })
+      if (!r.ok) throw new Error('AI 请求失败')
       const d = await r.json()
+      const assistantMsg = { role: 'assistant', content: cleanTutorReply(d.reply) || '抱歉，请稍后重试。' }
+      setAnimatedMessageIndex(messages.length + 1)
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: d.reply || '抱歉，请稍后重试。' },
+        assistantMsg,
       ])
+      await historyRequest(`/${id}/messages`, {
+        method: 'POST', body: JSON.stringify({ tutor, ...assistantMsg }),
+      })
+      const list = await historyRequest(`?tutor=${tutor}`)
+      setConversations(list.items)
     } catch (e) {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: '网络错误，请检查 API 配置后重试。' },
-      ])
+      setSaveError('对话或回复未能完整保存。请检查连接后重试。')
     } finally {
       setLoading(false)
     }
@@ -132,7 +278,8 @@ export default function AITutor() {
           return (
             <button
               key={key}
-              onClick={() => { setTutor(key); setMessages([]) }}
+              onClick={() => { if (!loading && !historyLoading) setTutor(key) }}
+              disabled={loading || historyLoading}
               style={{
                 flex: 1,
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem',
@@ -160,15 +307,9 @@ export default function AITutor() {
                   e.currentTarget.style.borderColor = 'transparent'
                 }
               }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                backgroundColor: isActive ? `color-mix(in srgb, ${t.bg} 14%, transparent)` : 'var(--surface-tertiary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.25rem',
-                transition: 'background-color 0.25s ease',
-              }}>
-                {t.emoji}
-              </div>
+              <TutorAvatar tutor={t} size={40} style={{
+                border: `2px solid ${isActive ? t.bg : 'transparent'}`,
+              }} />
               <div>
                 <div className="text-[12px] font-bold tracking-tight"
                   style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
@@ -183,6 +324,45 @@ export default function AITutor() {
           )
         })}
       </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <button type="button" onClick={() => setHistoryOpen(value => !value)}
+          disabled={loading || historyLoading}
+          className="flex items-center gap-1.5 text-xs font-medium"
+          style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <History size={15} /> 历史对话 ({conversations.length})
+        </button>
+        <button type="button" onClick={newConversation}
+          disabled={loading || historyLoading}
+          className="flex items-center gap-1.5 text-xs font-medium"
+          style={{ color: 'var(--accent)', cursor: 'pointer', marginLeft: 'auto' }}>
+          <Plus size={15} /> 新建对话
+        </button>
+      </div>
+      {historyOpen && <div style={{
+        display: 'grid', gap: '0.35rem', maxHeight: 180, overflowY: 'auto',
+        padding: '0.4rem', marginBottom: '0.75rem', borderRadius: 'var(--radius-md)',
+        backgroundColor: 'var(--surface-secondary)', border: '1px solid var(--border)',
+      }}>
+        {conversations.length === 0 && <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>暂无历史对话</span>}
+        {conversations.map(item => <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <button type="button" onClick={() => openConversation(item.id)}
+            disabled={loading || historyLoading}
+            className="text-xs text-left truncate"
+            style={{
+              flex: 1, minWidth: 0, padding: '0.55rem 0.7rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              backgroundColor: item.id === conversationId ? 'var(--accent-subtle)' : 'var(--surface)',
+              color: 'var(--text-primary)',
+            }} title={item.title}>{item.title}</button>
+          <button type="button" onClick={() => setDeleteTarget(item)}
+            disabled={loading || historyLoading}
+            aria-label={`删除对话：${item.title}`} title="删除这段对话"
+            style={{ padding: '0.55rem', color: 'var(--danger)', cursor: 'pointer' }}>
+            <Trash2 size={15} />
+          </button>
+        </div>)}
+      </div>}
+      {saveError && <p role="alert" className="text-xs mb-3" style={{ color: 'var(--danger)' }}>{saveError}</p>}
 
       {/* ═══ Chat Area ═══ */}
       <div style={{
@@ -199,14 +379,7 @@ export default function AITutor() {
           borderBottom: '1px solid var(--border)',
           backgroundColor: 'var(--surface)',
         }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: '50%',
-            backgroundColor: `color-mix(in srgb, ${activeTutor.bg} 16%, transparent)`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1rem',
-          }}>
-            {activeTutor.emoji}
-          </div>
+          <TutorAvatar tutor={activeTutor} size={34} />
           <div style={{ flex: 1 }}>
             <div className="text-[13px] font-bold tracking-tight"
               style={{ color: 'var(--text-primary)' }}>{activeTutor.name}</div>
@@ -224,7 +397,7 @@ export default function AITutor() {
         </div>
 
         {/* ── Messages ── */}
-        <div style={{
+        <div ref={chatScrollRef} style={{
           padding: '1rem', maxHeight: 400, overflowY: 'auto', minHeight: 300,
           backgroundColor: 'var(--surface)',
         }}>
@@ -234,14 +407,7 @@ export default function AITutor() {
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               paddingTop: '2rem', paddingBottom: '1.5rem',
             }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: '50%',
-                backgroundColor: `color-mix(in srgb, ${activeTutor.bg} 14%, transparent)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '2rem', marginBottom: '0.75rem',
-              }}>
-                {activeTutor.emoji}
-              </div>
+              <TutorAvatar tutor={activeTutor} size={64} style={{ marginBottom: '0.75rem' }} />
               <p className="text-sm font-semibold mb-1"
                 style={{ color: 'var(--text-primary)' }}>
                 {activeTutor.name} · {activeTutor.role}
@@ -289,31 +455,26 @@ export default function AITutor() {
           {messages.map((m, i) => (
             <div
               key={i}
-              className={`msg-enter ${m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}`}
+              className={animatedMessageIndex === i ? 'chat-message-enter' : ''}
               style={{ marginBottom: '0.55rem' }}>
-              {m.role === 'assistant' && (
-                <div style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  backgroundColor: `color-mix(in srgb, ${activeTutor.bg} 16%, transparent)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.8rem', marginRight: '0.45rem', marginTop: 2, flexShrink: 0,
-                }}>
-                  {activeTutor.emoji}
+              <div className={`chat-message-inner flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {m.role === 'assistant' && (
+                  <TutorAvatar tutor={activeTutor} size={26} style={{ marginRight: '0.45rem', marginTop: 2 }} />
+                )}
+                <div
+                  style={{
+                    maxWidth: '78%',
+                    padding: '0.55rem 0.9rem',
+                    borderRadius: m.role === 'user'
+                      ? 'var(--radius-md) 4px var(--radius-md) var(--radius-md)'
+                      : '4px var(--radius-md) var(--radius-md) var(--radius-md)',
+                    backgroundColor: m.role === 'user' ? 'var(--accent)' : 'var(--surface-tertiary)',
+                    color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
+                    fontSize: '0.8125rem', lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  }}>
+                  {m.content}
                 </div>
-              )}
-              <div
-                style={{
-                  maxWidth: '78%',
-                  padding: '0.55rem 0.9rem',
-                  borderRadius: m.role === 'user'
-                    ? 'var(--radius-md) 4px var(--radius-md) var(--radius-md)'
-                    : '4px var(--radius-md) var(--radius-md) var(--radius-md)',
-                  backgroundColor: m.role === 'user' ? 'var(--accent)' : 'var(--surface-tertiary)',
-                  color: m.role === 'user' ? '#fff' : 'var(--text-primary)',
-                  fontSize: '0.8125rem', lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                }}>
-                {m.content}
               </div>
             </div>
           ))}
@@ -324,14 +485,7 @@ export default function AITutor() {
               display: 'flex', alignItems: 'center', gap: '0.55rem',
               marginBottom: '0.55rem',
             }}>
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                backgroundColor: `color-mix(in srgb, ${activeTutor.bg} 16%, transparent)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.8rem',
-              }}>
-                {activeTutor.emoji}
-              </div>
+              <TutorAvatar tutor={activeTutor} size={26} />
               <div style={{
                 padding: '0.55rem 0.9rem',
                 borderRadius: '4px var(--radius-md) var(--radius-md) var(--radius-md)',
@@ -344,7 +498,6 @@ export default function AITutor() {
             </div>
           )}
 
-          <div ref={chatEndRef} />
         </div>
 
         {/* ── Input Bar ── */}
@@ -406,8 +559,12 @@ export default function AITutor() {
         fontSize: '10px', fontWeight: 500,
         color: 'var(--text-tertiary)', opacity: 0.55,
       }}>
-        由 DeepSeek API 驱动 · 对话内容仅用于学习指导
+        由 DeepSeek API 驱动 · 对话记录保存在本机
       </p>
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)}
+        title="删除导师对话？"
+        message={deleteTarget ? `“${deleteTarget.title}”及其中的消息会从本机永久删除。` : ''}
+        confirmLabel="删除" onConfirm={() => deleteConversation(deleteTarget)} danger />
     </div>
   )
 }

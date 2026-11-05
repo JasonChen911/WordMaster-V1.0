@@ -50,6 +50,7 @@ export default function Study() {
   const [whyData, setWhyData] = useState(null)
   const [whyLoading, setWhyLoading] = useState(false)
   const cardStartTime = useRef(Date.now())
+  const autoPlayTimerRef = useRef(null)
   const bookIdRef = useRef(null)
   const sessionIdRef = useRef(`study-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
 
@@ -123,7 +124,12 @@ export default function Study() {
   const currentWord = words[currentIndex]
 
   const handleCardTap = () => {
-    if (!showAnswer && currentWord) setShowAnswer(true)
+    if (!showAnswer && currentWord) {
+      clearTimeout(autoPlayTimerRef.current)
+      autoPlayTimerRef.current = null
+      speakWord(currentWord.english)
+      setShowAnswer(true)
+    }
   }
 
   const handleResult = async (result) => {
@@ -183,8 +189,15 @@ export default function Study() {
   // ── Auto-play the new word once its card has transitioned ──
   useEffect(() => {
     if (!currentWord || !getAutoPlay()) return
-    const t = setTimeout(() => speakWord(currentWord.english), 420)
-    return () => clearTimeout(t)
+    const t = setTimeout(() => {
+      autoPlayTimerRef.current = null
+      speakWord(currentWord.english)
+    }, 420)
+    autoPlayTimerRef.current = t
+    return () => {
+      clearTimeout(t)
+      if (autoPlayTimerRef.current === t) autoPlayTimerRef.current = null
+    }
   }, [currentWord?.english])
 
   // ── Stop any playing audio when leaving the study page ──

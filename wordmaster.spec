@@ -12,6 +12,7 @@ Builds a standalone Windows .exe that:
 
 import sys
 import ssl
+import os
 from pathlib import Path
 
 _block_cipher = None
@@ -179,7 +180,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[os.environ['WORDMASTER_TEST_RUNTIME_HOOK']] if os.environ.get('WORDMASTER_TEST_RUNTIME_HOOK') else [],
     excludes=[
         'tkinter',
         'matplotlib',
