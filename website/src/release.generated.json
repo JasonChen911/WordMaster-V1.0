@@ -3,6 +3,7 @@
   "channel": "Beta",
   "platform": "Windows x64",
   "installerFile": "WordMaster_Setup.exe",
-  "installerBytes": 56679993,
-  "sha256": "6d71fe2c22ba2093495f01830b79e0a4d367aecfd794bbd3d04015c9fb2e12ba"
+  "available": false,
+  "installerBytes": 0,
+  "sha256": ""
 }

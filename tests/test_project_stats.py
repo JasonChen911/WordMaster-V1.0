@@ -36,7 +36,7 @@ print("  PROJECT FACTS CONSISTENCY TEST")
 print("=" * 60)
 
 api_total, health, static, per_module = collect_routes()
-check("72 /api/* routes", api_total == 72, f"got {api_total}")
+check("75 /api/* routes", api_total == 75, f"got {api_total}")
 check("1 /health route", health == 1, f"got {health}")
 check("0 static/SPA fallback decorators", static == 0, f"got {static}")
 check("14 router modules", len(per_module) == 14, f"got {len(per_module)}")

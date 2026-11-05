@@ -3,9 +3,12 @@ import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'dist')
-const installer = resolve(root, '../release/WordMaster_Setup.exe')
-await mkdir(resolve(dist, 'downloads'), { recursive: true })
-await copyFile(installer, resolve(dist, 'downloads/WordMaster_Setup.exe'))
+const installer = process.env.WORDMASTER_INSTALLER || resolve(root, '../release/WordMaster_Setup.exe')
+const metadata = JSON.parse(await readFile(resolve(root, 'src/release.generated.json'), 'utf8'))
+if (metadata.available) {
+  await mkdir(resolve(dist, 'downloads'), { recursive: true })
+  await copyFile(installer, resolve(dist, 'downloads/WordMaster_Setup.exe'))
+}
 const agreement = await readFile(resolve(root, '../license_agreement.txt'), 'utf8')
 await writeFile(resolve(dist, 'license.txt'), `\uFEFF${agreement}`, 'utf8')
 const escapeHtml = value => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character])
@@ -36,6 +39,5 @@ for (const page of urls) {
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(path => `  <url><loc>${siteUrl}${path}</loc></url>`).join('\n')}\n</urlset>\n`
 await writeFile(resolve(dist, 'sitemap.xml'), sitemap)
 await writeFile(resolve(dist, 'robots.txt'), `User-agent: *\nAllow: /\nSitemap: ${siteUrl}/sitemap.xml\n`)
-const metadata = JSON.parse(await readFile(resolve(root, 'src/release.generated.json'), 'utf8'))
 await writeFile(resolve(dist, 'release.json'), JSON.stringify(metadata, null, 2) + '\n')
-console.log('Static site built with local installer, license, sitemap, and robots.txt')
+console.log(`Static site built ${metadata.available ? 'with local installer' : 'from source only'}, license, sitemap, and robots.txt`)

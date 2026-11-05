@@ -4,7 +4,7 @@
 
 WordMaster 是一款面向英语学习者与教学场景的 Windows 桌面应用。它将词书学习、FSRS 自适应复习、学习数据分析、AI 材料生成与个性化辅导整合在同一条学习路径中；学习数据默认保存在本地，未配置 AI 服务时核心学习功能仍可使用。
 
-> 本仓库为私有项目，采用专有软件许可，保留所有权利。
+> 本仓库公开提供源码，采用专有软件使用协议，尚未授予开源许可证。GitHub 仓库不提供 WordMaster 本体或安装包；请勿将源码可见误认为允许再分发。
 
 ---
 
@@ -132,18 +132,13 @@ python app.py
 
 ## 📦 打包
 
-```bash
-# 1. 构建前端
-cd web && npm install && npm run build && cd ..
-
-# 2. 打包主程序 EXE
-pyinstaller wordmaster.spec --clean
-# 输出：dist/WordMaster.exe
-
-# 3. 打包安装程序（per-user，无需管理员权限）
-cd installer
-pyinstaller installer.spec --clean
-# 输出：installer/dist/WordMaster_Setup.exe
+```powershell
+# 在仓库根目录执行
+cd web; npm install; cd ..
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build_release.ps1
+# 本体与安装包仅生成在本机 release/，不会提交到 GitHub
 ```
 
 用户无需安装 Python 或 Node.js。

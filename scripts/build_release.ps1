@@ -15,7 +15,12 @@ if (-not $SkipBuild) {
     finally { Pop-Location }
     $env:WORDMASTER_RELEASE_DIST = $mainStage
     Push-Location (Join-Path $projectRoot 'installer')
-    try { & $python -m PyInstaller --noconfirm --distpath $installerStage installer.spec; if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' } }
+    try {
+        & $python -m PyInstaller --noconfirm --distpath (Join-Path $projectRoot 'installer\dist') uninstall.spec
+        if ($LASTEXITCODE -ne 0) { throw 'Uninstaller build failed' }
+        & $python -m PyInstaller --noconfirm --distpath $installerStage installer.spec
+        if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+    }
     finally { Pop-Location; Remove-Item Env:WORDMASTER_RELEASE_DIST -ErrorAction SilentlyContinue }
 }
 
