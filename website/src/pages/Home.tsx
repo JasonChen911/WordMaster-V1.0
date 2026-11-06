@@ -77,6 +77,25 @@ function Intelligence() {
   </div></section>
 }
 
+function ReadingSection() {
+  return <section id="reading" className="section reading-section container" aria-labelledby="reading-title">
+    <Reveal className="reading-copy">
+      <span className="eyebrow">AI reading</span>
+      <h2 id="reading-title">阅读练习，<br />从目标开始。</h2>
+      <p>选择考试类型、难度、主题与篇幅，生成适合自己的英语文章和练习题。生成记录可以留在历史中，方便回看。</p>
+      <div className="reading-points"><span>按目标设置内容</span><span>文章与题目配套</span><span>保存生成历史</span></div>
+      <Link className="text-link" to="/download/">获取 WordMaster <ArrowUpRight size={16} /></Link>
+    </Reveal>
+    <Reveal className="reading-preview" delay={0.08}>
+      <div className="reading-preview-bar"><span><i /> WordMaster · AI 阅读</span><span>真实运行界面</span></div>
+      <a href="/images/wordmaster-reading-real.png" target="_blank" rel="noopener noreferrer" aria-label="查看 WordMaster AI 阅读界面原图">
+        <img src="/images/wordmaster-reading-real.png" alt="WordMaster AI 阅读真实界面，展示考试类型、难度、主题、篇幅和历史记录入口" width="1024" height="700" loading="lazy" />
+      </a>
+      <p>当前版本实机截图 · 点击查看原图</p>
+    </Reveal>
+  </section>
+}
+
 function MemoryEngine() {
   const [interval, setIntervalDays] = useState(6)
   const reduceMotion = useReducedMotion()
@@ -105,7 +124,7 @@ function Closing() {
 }
 
 export default function Home() {
-  return <><Hero /><div className="editorial-line container"><span>01 — 理解</span><span>02 — 练习</span><span>03 — 记住</span><div /></div><Features /><Intelligence /><MemoryEngine /><Closing /></>
+  return <><Hero /><div className="editorial-line container"><span>01 — 理解</span><span>02 — 练习</span><span>03 — 记住</span><div /></div><Features /><Intelligence /><ReadingSection /><MemoryEngine /><Closing /></>
 }
 
 
